@@ -1,0 +1,14 @@
+# Requirements 
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+websockets
+onnxruntime
+numpy
+joblib
+python-dotenv

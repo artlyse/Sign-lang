@@ -1,0 +1,12 @@
+import urllib.request
+import os
+
+url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+output = "ai-training/hand_landmarker.task"
+
+if not os.path.exists(output):
+    print("Descargando modelo de MediaPipe...")
+    urllib.request.urlretrieve(url, output)
+    print("Modelo descargado en:", output)
+else:
+    print("El modelo ya existe")

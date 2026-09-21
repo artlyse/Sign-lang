@@ -1,0 +1,31 @@
+# Git ignore 
+# Python
+__pycache__/
+*.py[cod]
+venv/
+venv_ai/
+*.egg-info/
+.pytest_cache/
+.env
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Base de datos
+*.db
+*.sqlite3
+
+# Modelos grandes
+*.onnx
+*.pt
+*.pkl
+*.task
+
+# Sistema
+.DS_Store
+Thumbs.db
