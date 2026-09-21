@@ -1,4 +1,9 @@
-# Sistema de Reconocimiento de Lengua de Senas en Tiempo Real
+Ejemplos de captura
+<img width="518" height="531" alt="Captura de pantalla 2026-09-21 123452" src="https://github.com/user-attachments/assets/a3346609-2afd-4bfd-9302-55afb67b9055" />
+DISEÑO INICIAL
+<img width="1123" height="835" alt="Captura de pantalla 2026-09-21 121048" src="https://github.com/user-attachments/assets/22325a3e-60a8-4b85-b603-4451089098ac" />
+
+# Sistema de Reconocimiento de Lengua de Señas en Tiempo Real
 
 Aplicacion web para el reconocimiento de lengua de senas mediante vision por computadora e inteligencia artificial. El sistema captura video desde la camara del navegador, detecta las manos del usuario y clasifica las senas en tiempo real, mostrando el texto reconocido en pantalla.
 
