@@ -1,0 +1,12 @@
+{
+  "HOLA": {"COMO": 100, "BUENOS": 25, "QUE": 20},
+  "COMO": {"ESTAS": 120, "ESTÁ": 45, "TE": 30, "SE": 20},
+  "BUENOS": {"DIAS": 120, "DÍAS": 120},
+  "BUENAS": {"TARDES": 100, "NOCHES": 100},
+  "MUCHAS": {"GRACIAS": 140},
+  "POR": {"FAVOR": 160, "QUE": 80},
+  "ME": {"LLAMO": 90, "GUSTA": 70, "PUEDES": 30},
+  "NECESITO": {"AYUDA": 120, "IR": 60},
+  "QUIERO": {"COMER": 90, "AGUA": 50, "IR": 45},
+  "GRACIAS": {"POR": 100}
+}
