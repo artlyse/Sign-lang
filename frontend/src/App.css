@@ -1534,3 +1534,131 @@ button {
   }
 }
 }
+/* -------------------------------------------------------------------------- */
+/* AUTOCOMPLETADO / CONSTRUCCION DE PALABRAS                                  */
+/* -------------------------------------------------------------------------- */
+
+.language-capture-status {
+  margin-top: 16px;
+  padding: 11px 13px;
+  border: 1px solid #e5e9ef;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.language-capture-status span {
+  display: block;
+  margin-bottom: 4px;
+  color: #8b94a3;
+  font-size: 10px;
+}
+
+.language-capture-status strong {
+  color: #172033;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+}
+
+.language-word-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.language-word-card {
+  padding: 14px 16px;
+  border: 1px solid #e5e9ef;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.language-word-card.corrected {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.language-word-card span {
+  display: block;
+  margin-bottom: 6px;
+  color: #8b94a3;
+  font-size: 10px;
+}
+
+.language-word-card strong {
+  color: #172033;
+  font-size: 20px;
+  letter-spacing: 0.06em;
+}
+
+.language-word-card.corrected strong {
+  color: #1d4ed8;
+}
+
+.language-suggestions {
+  margin-bottom: 14px;
+}
+
+.language-suggestions-label {
+  display: block;
+  margin-bottom: 7px;
+  color: #7c8696;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.language-suggestion-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.language-suggestion-buttons button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: white;
+  color: #334155;
+  cursor: pointer;
+}
+
+.language-suggestion-buttons button:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.language-suggestion-buttons button span {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.language-no-suggestions {
+  color: #9aa3af;
+  font-size: 11px;
+}
+
+.language-event-message {
+  margin-top: 10px;
+  color: #15803d;
+  font-size: 11px;
+}
+
+.language-event-message.error {
+  color: #dc2626;
+}
+
+.language-help {
+  margin-top: 12px;
+  color: #8b94a3;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 700px) {
+  .language-word-grid {
+    grid-template-columns: 1fr;
+  }
+}

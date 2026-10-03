@@ -6,7 +6,110 @@ import {
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
 
 const WS_URL = "ws://localhost:8000/ws/recognition";
+
+const buildWsUrl = () => {
+  const token = window.localStorage.getItem("signlang_access_token");
+  if (!token) return WS_URL;
+  const separator = WS_URL.includes("?") ? "&" : "?";
+  return `${WS_URL}${separator}token=${encodeURIComponent(token)}`;
+};
+
 const MODEL_URL = "/hand_landmarker.task";
+
+const RECOGNITION_FPS = 30;
+const SEND_INTERVAL_MS = 1000 / RECOGNITION_FPS;
+
+// Si J/Z no coinciden con la orientacion usada durante entrenamiento, prueba true.
+const MIRROR_LANDMARK_X = false;
+
+// Si la mano permanece fuera este tiempo, se cierra/corrige la palabra.
+// Una ausencia mas corta solo desbloquea letras repetidas, por ejemplo LL.
+const WORD_GAP_MS = 950;
+
+type RecognitionMode = "static" | "dynamic" | "none";
+
+type Suggestion = {
+  word: string;
+  key: string;
+  score: number;
+  base_score?: number;
+  ml_probability?: number | null;
+  ml_weight?: number;
+  distance: number;
+  similarity: number;
+  frequency: number;
+  dictionary?: boolean;
+  completion?: boolean;
+};
+
+type PendingFeedback = {
+  raw: string;
+  predicted: string;
+  context_words: string[];
+  autocorrected: boolean;
+  score: number;
+  margin?: number;
+  suggestions: string[];
+};
+
+type LearningStats = {
+  memory?: {
+    feedback_count?: number;
+    learned_substitution_pairs?: number;
+    learned_bigram_pairs?: number;
+    learned_trigram_pairs?: number;
+  };
+  ranker?: {
+    fitted?: boolean;
+    trained_feedback?: number;
+    positive_examples?: number;
+    negative_examples?: number;
+    effective_weight?: number;
+  };
+};
+
+type LearningState = {
+  pending_feedback: PendingFeedback | null;
+  stats: LearningStats;
+};
+
+type LanguageEvent =
+  | {
+      type: string;
+      [key: string]: unknown;
+    }
+  | null;
+
+type LanguageState = {
+  raw_word: string;
+  resolved_word?: string;
+  preview_word: string;
+  autocorrect_active?: boolean;
+  resolution_reason?: string;
+  suggestions: Suggestion[];
+  sentence_words: string[];
+  sentence: string;
+  display_text: string;
+  event: LanguageEvent;
+  learning?: LearningState;
+  error?: string;
+};
+
+const EMPTY_LANGUAGE_STATE: LanguageState = {
+  raw_word: "",
+  resolved_word: "",
+  preview_word: "",
+  autocorrect_active: false,
+  suggestions: [],
+  sentence_words: [],
+  sentence: "",
+  display_text: "",
+  event: null,
+  learning: {
+    pending_feedback: null,
+    stats: {},
+  },
+};
 
 function Translator() {
   const {
@@ -21,16 +124,63 @@ function Translator() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
   const wsRef = useRef<WebSocket | null>(null);
   const landmarkerRef = useRef<HandLandmarker | null>(null);
   const animationRef = useRef<number>(0);
+  const lastSentAtRef = useRef<number>(0);
+  const frameInFlightRef = useRef(false);
+  const frameRequestIdRef = useRef(0);
+  const frameTimeoutRef = useRef<number | null>(null);
+  const hadHandRef = useRef(false);
+  const wordGapTimerRef = useRef<number | null>(null);
 
   const [letter, setLetter] = useState("-");
   const [confidence, setConfidence] = useState(0);
+  const [recognitionMode, setRecognitionMode] =
+    useState<RecognitionMode>("none");
   const [status, setStatus] = useState("Iniciando...");
   const [connected, setConnected] = useState(false);
-  const [text, setText] = useState("");
+  const [language, setLanguage] = useState<LanguageState>(
+    EMPTY_LANGUAGE_STATE,
+  );
+  const [manualCorrection, setManualCorrection] = useState("");
+  const [aiSentence, setAiSentence] = useState("");
+  const [aiCorrecting, setAiCorrecting] = useState(false);
+  const [aiCorrectionError, setAiCorrectionError] = useState("");
+
+  const sendCommand = (payload: Record<string, unknown>) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(payload));
+    }
+  };
+
+  const clearFrameTimeout = () => {
+    if (frameTimeoutRef.current !== null) {
+      window.clearTimeout(frameTimeoutRef.current);
+      frameTimeoutRef.current = null;
+    }
+  };
+
+  const releaseFrame = () => {
+    frameInFlightRef.current = false;
+    clearFrameTimeout();
+  };
+
+  const cancelWordGapTimer = () => {
+    if (wordGapTimerRef.current !== null) {
+      window.clearTimeout(wordGapTimerRef.current);
+      wordGapTimerRef.current = null;
+    }
+  };
+
+  const scheduleWordFinalization = () => {
+    cancelWordGapTimer();
+
+    wordGapTimerRef.current = window.setTimeout(() => {
+      sendCommand({ mode: "finalize_word" });
+      wordGapTimerRef.current = null;
+    }, WORD_GAP_MS);
+  };
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -41,8 +191,7 @@ function Translator() {
       const landmarker = landmarkerRef.current;
 
       if (!video || !canvas || !landmarker) {
-        animationRef.current =
-          requestAnimationFrame(detectLoop);
+        animationRef.current = requestAnimationFrame(detectLoop);
         return;
       }
 
@@ -50,33 +199,17 @@ function Translator() {
         const ctx = canvas.getContext("2d");
 
         if (ctx) {
-          ctx.clearRect(
-            0,
-            0,
-            canvas.width,
-            canvas.height
-          );
-
-          ctx.drawImage(
-            video,
-            0,
-            0,
-            canvas.width,
-            canvas.height
-          );
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
           const result = landmarker.detectForVideo(
             video,
-            performance.now()
+            performance.now(),
           );
 
-          if (
-            result.landmarks &&
-            result.landmarks.length > 0
-          ) {
-            /*
-             * Mostrar todas las manos detectadas.
-             */
+          if (result.landmarks && result.landmarks.length > 0) {
+            cancelWordGapTimer();
+
             for (const hand of result.landmarks) {
               ctx.fillStyle = "#22c55e";
 
@@ -85,521 +218,610 @@ function Translator() {
                 const y = lm.y * canvas.height;
 
                 ctx.beginPath();
-                ctx.arc(
-                  x,
-                  y,
-                  4,
-                  0,
-                  Math.PI * 2
-                );
+                ctx.arc(x, y, 4, 0, Math.PI * 2);
                 ctx.fill();
               }
             }
 
-            /*
-             * El backend actual solamente acepta:
-             *
-             * 21 landmarks × XYZ = 63 valores.
-             *
-             * Por eso utilizamos la primera mano
-             * para reconocimiento.
-             */
-            const firstHand =
-              result.landmarks[0];
+            const firstHand = result.landmarks[0];
+            hadHandRef.current = true;
 
-            const landmarks =
-              firstHand.flatMap((lm) => [
-                lm.x,
-                lm.y,
-                lm.z,
-              ]);
+            const landmarks = firstHand.flatMap((lm) => [
+              MIRROR_LANDMARK_X ? 1 - lm.x : lm.x,
+              lm.y,
+              lm.z,
+            ]);
+
+            const now = performance.now();
 
             if (
-              wsRef.current?.readyState ===
-              WebSocket.OPEN
+              now - lastSentAtRef.current >= SEND_INTERVAL_MS &&
+              wsRef.current?.readyState === WebSocket.OPEN &&
+              !frameInFlightRef.current
             ) {
+              lastSentAtRef.current = now;
+              frameInFlightRef.current = true;
+              frameRequestIdRef.current += 1;
+
+              const requestId = frameRequestIdRef.current;
+
               wsRef.current.send(
                 JSON.stringify({
-                  mode: "static",
+                  mode: "hybrid",
+                  request_id: requestId,
+                  timestamp_ms: now,
                   landmarks,
-                })
+                }),
               );
+
+              // Seguridad: si una respuesta se pierde, no congelamos la cámara.
+              clearFrameTimeout();
+              frameTimeoutRef.current = window.setTimeout(() => {
+                frameInFlightRef.current = false;
+                frameTimeoutRef.current = null;
+              }, 700);
             }
+          } else if (hadHandRef.current) {
+            // La mano acaba de desaparecer.
+            hadHandRef.current = false;
+            lastSentAtRef.current = 0;
+
+            sendCommand({ mode: "hand_absent" });
+            scheduleWordFinalization();
           }
         }
       }
 
-      animationRef.current =
-        requestAnimationFrame(detectLoop);
+      animationRef.current = requestAnimationFrame(detectLoop);
     };
 
     const initialize = async () => {
       try {
-        /*
-         * WEBSOCKET
-         */
-        const ws = new WebSocket(WS_URL);
+        const ws = new WebSocket(buildWsUrl());
 
         ws.onopen = () => {
+          releaseFrame();
           setConnected(true);
+          setStatus("Backend conectado");
+          ws.send(JSON.stringify({ mode: "get_language_state" }));
         };
 
         ws.onclose = () => {
+          releaseFrame();
           setConnected(false);
+          setStatus("Backend desconectado");
         };
 
         ws.onerror = () => {
+          releaseFrame();
           setConnected(false);
+          setStatus("Error de conexion con backend");
         };
 
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
 
-            if (data.letter) {
-              setLetter(data.letter);
-              setConfidence(
-                data.confidence ?? 0
+            // El backend responde primero la inferencia visual. Esto libera
+            // inmediatamente el siguiente frame y evita acumular retraso.
+            if (data.kind === "recognition" || data.letter !== undefined) {
+              releaseFrame();
+            }
+
+            if (typeof data.letter === "string") {
+              setLetter(data.letter || "-");
+              setConfidence(Number(data.confidence ?? 0));
+              setRecognitionMode(
+                data.mode === "dynamic"
+                  ? "dynamic"
+                  : data.mode === "static"
+                    ? "static"
+                    : "none",
               );
             }
 
+            if (data.language) {
+              setLanguage(data.language as LanguageState);
+            }
+
+            if (data.kind === "sentence_correction") {
+              setAiCorrecting(false);
+              const correction = data.sentence_correction;
+              if (correction?.corrected) {
+                setAiSentence(String(correction.corrected));
+                setAiCorrectionError("");
+              } else {
+                setAiCorrectionError("No se pudo generar una corrección contextual.");
+              }
+            }
+
             if (data.error) {
-              console.warn(
-                "Backend:",
-                data.error
-              );
+              setAiCorrecting(false);
+              if (String(data.error).toLowerCase().includes("modelo contextual")
+                  || String(data.error).toLowerCase().includes("torch")
+                  || String(data.error).toLowerCase().includes("transform")) {
+                setAiCorrectionError(String(data.error));
+              }
+              releaseFrame();
+              console.warn("Backend:", data.error);
+              setStatus(`Backend: ${String(data.error)}`);
             }
           } catch (error) {
-            console.error(
-              "Respuesta WebSocket inválida:",
-              error
-            );
+            console.error("Respuesta WebSocket invalida:", error);
           }
         };
 
         wsRef.current = ws;
 
-        /*
-         * MEDIAPIPE
-         */
         setStatus("Cargando detector...");
 
-        const vision =
-          await FilesetResolver.forVisionTasks(
-            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-          );
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
+        );
 
-        const landmarker =
-          await HandLandmarker.createFromOptions(
-            vision,
-            {
-              baseOptions: {
-                modelAssetPath: MODEL_URL,
-                delegate: "GPU",
-              },
-
-              runningMode: "VIDEO",
-
-              /*
-               * Visualmente podemos detectar
-               * hasta dos manos.
-               */
-              numHands: 2,
-            }
-          );
+        const landmarker = await HandLandmarker.createFromOptions(
+          vision,
+          {
+            baseOptions: {
+              modelAssetPath: MODEL_URL,
+              delegate: "GPU",
+            },
+            runningMode: "VIDEO",
+            numHands: 2,
+          },
+        );
 
         landmarkerRef.current = landmarker;
 
-        /*
-         * CÁMARA
-         */
-        setStatus("Abriendo cámara...");
+        setStatus("Abriendo camara...");
 
-        stream =
-          await navigator.mediaDevices.getUserMedia({
-            video: {
-              width: {
-                ideal: 1280,
-              },
-
-              height: {
-                ideal: 720,
-              },
-
-              facingMode: "user",
-            },
-
-            audio: false,
-          });
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: "user",
+          },
+          audio: false,
+        });
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-
           await videoRef.current.play();
         }
 
-        setStatus("Cámara activa");
-
+        setStatus("Camara activa");
         detectLoop();
       } catch (error) {
         console.error(error);
-
-        setStatus(
-          "No se pudo iniciar la cámara"
-        );
+        setStatus("No se pudo iniciar la camara");
       }
     };
 
     initialize();
 
     return () => {
-      cancelAnimationFrame(
-        animationRef.current
-      );
-
+      cancelAnimationFrame(animationRef.current);
+      cancelWordGapTimer();
+      clearFrameTimeout();
+      frameInFlightRef.current = false;
       wsRef.current?.close();
-
       landmarkerRef.current?.close();
 
       if (stream) {
-        stream
-          .getTracks()
-          .forEach((track) =>
-            track.stop()
-          );
+        stream.getTracks().forEach((track) => track.stop());
       }
     };
   }, []);
 
-  const agregarLetra = () => {
-    if (letter !== "-") {
-      setText(
-        (previous) =>
-          previous + letter
-      );
-    }
+  const finalizarPalabra = () => {
+    cancelWordGapTimer();
+    sendCommand({ mode: "finalize_word" });
   };
 
-  const agregarEspacio = () => {
-    setText(
-      (previous) =>
-        previous + " "
-    );
+  const elegirSugerencia = (word: string) => {
+    cancelWordGapTimer();
+    sendCommand({
+      mode: "choose_suggestion",
+      word,
+    });
+  };
+
+  const corregirOracionIA = () => {
+    const sentence = language.display_text.trim();
+
+    if (!sentence && !language.raw_word) return;
+
+    setAiCorrecting(true);
+    setAiCorrectionError("");
+
+    sendCommand({
+      mode: "correct_sentence",
+      sentence,
+    });
   };
 
   const borrarUltimo = () => {
-    setText(
-      (previous) =>
-        previous.slice(0, -1)
-    );
+    cancelWordGapTimer();
+    setAiSentence("");
+    sendCommand({ mode: "backspace_language" });
   };
 
   const limpiar = () => {
-    setText("");
+    cancelWordGapTimer();
+    setManualCorrection("");
+    setAiSentence("");
+    setAiCorrectionError("");
+    sendCommand({ mode: "clear_language" });
   };
+
+
+  const corregirYAprender = () => {
+    const word = manualCorrection.trim();
+    if (!word) return;
+
+    sendCommand({
+      mode: "correct_last_word",
+      word,
+    });
+    setManualCorrection("");
+  };
+
 
   return (
     <div className="page translator-page">
-
       <div className="page-heading">
         <div>
           <h2>Sing-lang</h2>
-
-          <p>
-            Reconocimiento de Lengua de Señas.
-          </p>
+          <p>Reconocimiento de Lengua de Señas.</p>
         </div>
 
         <div
-          className={`translator-status ${
-            connected ? "connected" : ""
-          }`}
+          className={`translator-status ${connected ? "connected" : ""}`}
         >
           <span />
-
-          {connected
-            ? "Backend conectado"
-            : "Backend desconectado"}
+          {connected ? "Backend conectado" : "Backend desconectado"}
         </div>
       </div>
 
       <div className="translator-grid">
-
-        {/* CÁMARA */}
-
         <section className="panel translator-camera-panel">
-
           <div className="translator-panel-title">
-
             <div>
-              <h3>Cámara</h3>
-
-              <p>
-                Realiza una seña frente a la cámara
-              </p>
+              <h3>Camara</h3>
+              <p>Realiza una seña frente a la camara</p>
             </div>
-
-            <span className="camera-live">
-              EN VIVO
-            </span>
-
+            <span className="camera-live">EN VIVO</span>
           </div>
 
           <div className="translator-camera">
-
-            <video
-              ref={videoRef}
-              playsInline
-              muted
-            />
-
-            <canvas
-              ref={canvasRef}
-              width={640}
-              height={480}
-            />
-
-            <div className="camera-status">
-              {status}
-            </div>
-
+            <video ref={videoRef} playsInline muted />
+            <canvas ref={canvasRef} width={640} height={480} />
+            <div className="camera-status">{status}</div>
           </div>
 
           <div className="camera-help">
-            Mantén las manos visibles dentro
-            del área de la cámara.
+            Las letras se agregan automaticamente cuando la prediccion es estable.
           </div>
-
         </section>
 
-        {/* RECONOCIMIENTO */}
-
         <section className="panel recognition-panel">
-
           <div className="translator-panel-title">
             <div>
               <h3>Reconocimiento</h3>
-
               <p>
                 Resultado de la seña detectada
+                {recognitionMode === "dynamic"
+                  ? " · Dinamica"
+                  : recognitionMode === "static"
+                    ? " · Estatica"
+                    : ""}
               </p>
             </div>
           </div>
 
           <div className="recognized-sign">
-
-            <span>
-              Seña reconocida
-            </span>
-
-            <strong>
-              {letter}
-            </strong>
-
+            <span>Seña reconocida</span>
+            <strong>{letter}</strong>
           </div>
 
           <div className="translator-confidence">
-
             <div>
               <span>Confianza</span>
-
-              <strong>
-                {(confidence * 100).toFixed(1)}%
-              </strong>
+              <strong>{(confidence * 100).toFixed(1)}%</strong>
             </div>
 
             <div className="translator-progress">
-
               <div
                 style={{
-                  width: `${Math.min(
-                    confidence * 100,
-                    100
-                  )}%`,
+                  width: `${Math.min(confidence * 100, 100)}%`,
                 }}
               />
-
             </div>
+          </div>
 
+          <div className="language-capture-status">
+            <span>Palabra interpretada</span>
+            <strong>
+              {language.resolved_word || language.preview_word || language.raw_word || "-"}
+            </strong>
           </div>
 
           <button
             className="translator-primary-button"
-            onClick={agregarLetra}
-            disabled={letter === "-"}
+            onClick={finalizarPalabra}
+            disabled={!language.raw_word}
           >
-            + Agregar al mensaje
+            Finalizar palabra
           </button>
-
         </section>
-
       </div>
 
-      {/* MENSAJE */}
-
       <section className="panel translator-message">
-
         <div className="translator-panel-title">
-
           <div>
-            <h3>
-              Mensaje del cliente
-            </h3>
-
+            <h3>Construccion de la oracion</h3>
             <p>
-              Construye el mensaje utilizando
-              las señas reconocidas.
+              El corrector propone palabras segun errores visuales, frecuencia y contexto.
             </p>
           </div>
-
           <span className="character-counter">
-            {text.length} caracteres
+            {language.display_text.length} caracteres
           </span>
+        </div>
 
+        <div className="language-word-grid">
+          <div className="language-word-card corrected">
+            <span>Secuencia reconocida</span>
+            <strong>
+              {language.resolved_word || language.preview_word || language.raw_word || "-"}
+            </strong>
+          </div>
+
+          <div className="language-word-card">
+            <span>Captura original</span>
+            <strong>{language.raw_word || "-"}</strong>
+          </div>
+        </div>
+
+        <div className="language-suggestions">
+          <span className="language-suggestions-label">Sugerencias</span>
+
+          <div className="language-suggestion-buttons">
+            {language.suggestions.length > 0 ? (
+              language.suggestions.map((suggestion) => (
+                <button
+                  type="button"
+                  key={`${suggestion.word}-${suggestion.score}`}
+                  onClick={() => elegirSugerencia(suggestion.word)}
+                  title={`Score ${(suggestion.score * 100).toFixed(1)}%`}
+                >
+                  <strong>{suggestion.word}</strong>
+                  <span>{(suggestion.score * 100).toFixed(0)}%</span>
+                </button>
+              ))
+            ) : (
+              <span className="language-no-suggestions">
+                Escribe al menos dos letras para obtener sugerencias.
+              </span>
+            )}
+          </div>
         </div>
 
         <div
           className={`translator-text ${
-            !text ? "empty" : ""
+            !language.display_text ? "empty" : ""
           }`}
         >
-          {text ||
-            "El mensaje reconocido aparecerá aquí..."}
+          {language.display_text ||
+            "La oracion corregida aparecera aqui..."}
         </div>
 
-        <div className="translator-actions">
+        <div className="language-word-grid">
+          <div className="language-word-card corrected">
+            <span>Oración contextual (IA)</span>
+            <strong>
+              {aiSentence ||
+                "Finaliza varias palabras y usa “Corregir oración con IA”."}
+            </strong>
+          </div>
+        </div>
 
+        {aiCorrectionError && (
+          <div className="language-event-message error">
+            {aiCorrectionError}
+          </div>
+        )}
+
+        {language.event?.type === "word_finalized" && (
+          <div className="language-event-message">
+            Palabra agregada: {String(language.event.word ?? "")}
+          </div>
+        )}
+
+        {language.learning?.pending_feedback && (
+          <div className="learning-feedback-card">
+            <div className="learning-feedback-header">
+              <div>
+                <h4>Corrección automática</h4>
+                <p>
+                  Si continúas con la siguiente palabra, el sistema usa esta
+                  corrección como aprendizaje débil de forma automática.
+                </p>
+              </div>
+              <span>Aprendizaje adaptativo</span>
+            </div>
+
+            <div className="learning-feedback-comparison">
+              <div>
+                <span>Reconocido</span>
+                <strong>{language.learning.pending_feedback.raw}</strong>
+              </div>
+              <div className="learning-arrow">→</div>
+              <div>
+                <span>Interpretado</span>
+                <strong>{language.learning.pending_feedback.predicted}</strong>
+              </div>
+            </div>
+
+            <div className="learning-correction-row">
+              <input
+                type="text"
+                value={manualCorrection}
+                onChange={(event) => setManualCorrection(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    corregirYAprender();
+                  }
+                }}
+                placeholder="Solo corrige si el resultado está mal"
+                maxLength={30}
+              />
+              <button
+                type="button"
+                onClick={corregirYAprender}
+                disabled={!manualCorrection.trim()}
+              >
+                Corregir
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="learning-stats-bar">
+          <span>
+            Correcciones aprendidas: {language.learning?.stats?.memory?.feedback_count ?? 0}
+          </span>
+          <span>
+            Confusiones: {language.learning?.stats?.memory?.learned_substitution_pairs ?? 0}
+          </span>
+          <span>
+            Ranker ML: {language.learning?.stats?.ranker?.trained_feedback ?? 0} feedback
+          </span>
+          <span>
+            Peso ML: {(((language.learning?.stats?.ranker?.effective_weight ?? 0) * 100)).toFixed(0)}%
+          </span>
+        </div>
+
+        {language.error && (
+          <div className="language-event-message error">
+            {language.error}
+          </div>
+        )}
+
+        <div className="translator-actions">
           <button
-            onClick={agregarEspacio}
+            className="translator-primary-button"
+            onClick={corregirOracionIA}
+            disabled={
+              aiCorrecting ||
+              (!language.display_text.trim() && !language.raw_word)
+            }
           >
-            Espacio
+            {aiCorrecting ? "Corrigiendo con IA..." : "Corregir oración con IA"}
+          </button>
+
+          <button onClick={finalizarPalabra} disabled={!language.raw_word}>
+            Finalizar palabra
           </button>
 
           <button
             onClick={borrarUltimo}
-            disabled={!text}
+            disabled={!language.raw_word && language.sentence_words.length === 0}
           >
-            Borrar último
+            Borrar ultimo
           </button>
 
           <button
             className="translator-danger-button"
             onClick={limpiar}
-            disabled={!text}
+            disabled={!language.raw_word && language.sentence_words.length === 0}
           >
             Limpiar
           </button>
-
         </div>
 
+        <div className="language-help">
+          Retira la mano menos de {WORD_GAP_MS} ms para repetir una letra. Si la
+          mantienes fuera aproximadamente 1 segundo, la palabra se finaliza y se
+          corrige automaticamente.
+        </div>
       </section>
 
-{/* RESPUESTA DEL PERSONAL */}
-<section className="panel staff-response-section">
+      <section className="panel staff-response-section">
+        <div className="staff-response-header">
+          <div>
+            <h3>Respuesta del personal</h3>
+            <p>
+              Convierte la voz del personal en texto para facilitar la comunicacion
+              con el usuario.
+            </p>
+          </div>
 
-  {/* Encabezado */}
-  <div className="staff-response-header">
-    <div>
-      <h3>Respuesta del personal</h3>
-      <p>
-        Convierte la voz del personal en texto para
-        facilitar la comunicación con el usuario.
-      </p>
-    </div>
+          <div
+            className={`microphone-status ${isListening ? "listening" : ""}`}
+          >
+            <span className="microphone-status-dot" />
+            {isListening ? "Escuchando" : "Microfono listo"}
+          </div>
+        </div>
 
-    <div
-      className={`microphone-status ${
-        isListening ? "listening" : ""
-      }`}
-    >
-      <span className="microphone-status-dot" />
+        <div className="speech-content">
+          <div className="speech-content-header">
+            <span>Texto reconocido por voz</span>
+            <span className="speech-character-count">
+              {speechText.length} caracteres
+            </span>
+          </div>
 
-      {isListening ? "Escuchando" : "Micrófono listo"}
-    </div>
-  </div>
+          <div className={`speech-result ${!speechText ? "empty" : ""}`}>
+            {speechText || "La respuesta hablada aparecera aqui..."}
+          </div>
+        </div>
 
-  {/* Texto reconocido */}
-  <div className="speech-content">
+        {speechError && <div className="speech-error">{speechError}</div>}
 
-    <div className="speech-content-header">
-      <span>Texto reconocido por voz</span>
+        {!speechSupported && (
+          <div className="speech-warning">
+            El reconocimiento de voz no esta disponible en este navegador.
+          </div>
+        )}
 
-      <span className="speech-character-count">
-        {speechText.length} caracteres
-      </span>
-    </div>
+        <div className="speech-toolbar">
+          <div className="speech-controls">
+            <button
+              type="button"
+              className="speech-button speech-start"
+              onClick={startListening}
+              disabled={!speechSupported || isListening}
+            >
+              <span>Iniciar microfono</span>
+            </button>
 
-    <div
-      className={`speech-result ${
-        !speechText ? "empty" : ""
-      }`}
-    >
-      {speechText ||
-        "La respuesta hablada aparecerá aquí..."}
-    </div>
+            <button
+              type="button"
+              className="speech-button speech-stop"
+              onClick={stopListening}
+              disabled={!isListening}
+            >
+              <span>Detener</span>
+            </button>
 
-  </div>
+            <button
+              type="button"
+              className="speech-button speech-clear"
+              onClick={clearSpeechText}
+              disabled={!speechText}
+            >
+              <span>Limpiar respuesta</span>
+            </button>
+          </div>
 
-  {/* Errores */}
-  {speechError && (
-    <div className="speech-error">
-      ⚠ {speechError}
-    </div>
-  )}
-
-  {!speechSupported && (
-    <div className="speech-warning">
-      ⚠ El reconocimiento de voz no está disponible
-      en este navegador.
-    </div>
-  )}
-
-  {/* Controles */}
-  <div className="speech-toolbar">
-
-    <div className="speech-controls">
-
-      <button
-        type="button"
-        className="speech-button speech-start"
-        onClick={startListening}
-        disabled={!speechSupported || isListening}
-      >
-        <span>🎙</span>
-        <span>Iniciar micrófono</span>
-      </button>
-
-      <button
-        type="button"
-        className="speech-button speech-stop"
-        onClick={stopListening}
-        disabled={!isListening}
-      >
-        <span>■</span>
-        <span>Detener</span>
-      </button>
-
-      <button
-        type="button"
-        className="speech-button speech-clear"
-        onClick={clearSpeechText}
-        disabled={!speechText}
-      >
-        <span>⌫</span>
-        <span>Limpiar respuesta</span>
-      </button>
-
-    </div>
-
-    <div className="speech-language">
-      <span>Idioma</span>
-      <strong>Español (Perú)</strong>
-    </div>
-
-  </div>
-
-</section>
-
+          <div className="speech-language">
+            <span>Idioma</span>
+            <strong>Español (Peru)</strong>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
