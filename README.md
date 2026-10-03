@@ -36,6 +36,12 @@ Machine Learning y Visión por Computadora
 
 ---
 
+## Diseño de EndPoints
+
+<img width="1013" height="1079" alt="image" src="https://github.com/user-attachments/assets/66228732-7837-4182-9f29-11acd3ee29f5" />
+
+---
+
 ## Descripción General
 
 **SignLang** es una aplicación web capaz de **capturar, interpretar y traducir** lengua de señas en tiempo real. Utiliza la cámara del navegador para detectar las manos del usuario, extrae *landmarks* con **MediaPipe**, clasifica señas estáticas y dinámicas mediante modelos **ONNX** y construye palabras y oraciones aplicando un sistema de **corrección léxica y contextual** potenciado por un **LLM (Qwen)**.
