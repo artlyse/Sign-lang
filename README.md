@@ -140,69 +140,8 @@ Hola, ¿cómo están? Hoy hace frío.
 
 # Arquitectura
 
-```text
-                         ┌──────────────────┐
-                         │      USUARIO     │
-                         └────────┬─────────┘
-                                  │
-                                  ▼
-                         ┌──────────────────┐
-                         │      CÁMARA      │
-                         └────────┬─────────┘
-                                  │
-                                  ▼
-                         ┌──────────────────┐
-                         │    MediaPipe     │
-                         │ Hand Landmarker  │
-                         └────────┬─────────┘
-                                  │
-                                  ▼
-                         21 LANDMARKS X/Y/Z
-                                  │
-                   ┌──────────────┴──────────────┐
-                   │                             │
-                   ▼                             ▼
-          ┌─────────────────┐           ┌─────────────────┐
-          │ Modelo estático │           │ Modelo dinámico │
-          │      MLP        │           │      LSTM       │
-          │ gesture_model   │           │   lstm_model    │
-          └────────┬────────┘           └────────┬────────┘
-                   │                             │
-                   └──────────────┬──────────────┘
-                                  │
-                                  ▼
-                       RECONOCIMIENTO HÍBRIDO
-                                  │
-                                  ▼
-                           LETRAS ESTABLES
-                                  │
-                                  ▼
-                         CONSTRUCCIÓN PALABRA
-                                  │
-                                  ▼
-              ┌─────────────────────────────────┐
-              │       CORRECTOR LÉXICO          │
-              │                                 │
-              │ Hunspell                        │
-              │ wordfreq                        │
-              │ Levenshtein                     │
-              │ Matriz de confusión             │
-              │ Contexto                        │
-              │ Aprendizaje personalizado       │
-              └────────────────┬────────────────┘
-                               │
-                               ▼
-                       PALABRAS CORREGIDAS
-                               │
-                               ▼
-                    (Instalacion Opcional)
-                    ┌─────────────────────┐
-                    │     Qwen3-0.6B      │
-                    │ Corrección contexto │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                       ORACIÓN CORREGIDA
+<img width="1024" height="1536" alt="Arquitectura de reconocimiento de señas y corrección textual" src="https://github.com/user-attachments/assets/6d037e88-a6cb-40ec-9c85-13ed9277ac65" />
+
 ```
 
 ---
@@ -264,49 +203,8 @@ Hola, ¿cómo están? Hoy hace frío.
 
 # Estructura del proyecto
 
-```text
-Sign-lang/
-│
-├── backend/
-│   │
-│   ├── app/
-│   │   │
-│   │   ├── ai/
-│   │   │   └── models/
-│   │   │
-│   │   ├── api/
-│   │   ├── core/
-│   │   ├── data/
-│   │   ├── models/
-│   │   ├── schemas/
-│   │   ├── services/
-│   │   ├── websocket/
-│   │   │
-│   │   ├── config.py
-│   │   ├── database.py
-│   │   └── main.py
-│   │
-│   ├── data/
-│   │   ├── app.db
-│   │   └── models/
-│   │
-│   ├── scripts/
-│   ├── requirements.txt
-│   └── .env
-│
-├── frontend/
-│   │
-│   ├── public/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   └── services/
-│   │
-│   ├── package.json
-│   ├── package-lock.json
-│   └── vite.config.ts
-│
-└── README.md
+<img width="1312" height="1199" alt="VS COD" src="https://github.com/user-attachments/assets/078fc453-957f-43c8-9f1f-7d124e1269fd" />
+
 ```
 
 ---
@@ -716,7 +614,7 @@ Ejemplo:
 Torch: 2.14.1+cu132
 CUDA runtime: 13.2
 CUDA disponible: True
-GPU: NVIDIA GeForce RTX 5060
+GPU: NVIDIA GeForce RTX/GTX/MX/etc...
 ```
 
 ---
