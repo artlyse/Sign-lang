@@ -1,51 +1,73 @@
-**Traductor Inteligente de Lengua de Señas mediante
-Machine Learning y Visión por Computadora**
+<div align="center">
 
-## Interfaz v0.1
-<img width="518" height="531" alt="Captura de pantalla 2026-09-21 123452" src="https://github.com/user-attachments/assets/a3346609-2afd-4bfd-9302-55afb67b9055" />
-
-## DISEÑO INICIAL
-<img width="1123" height="835" alt="Captura de pantalla 2026-09-21 121048" src="https://github.com/user-attachments/assets/22325a3e-60a8-4b85-b603-4451089098ac" />
-
-# Sistema de Reconocimiento de Lengua de Señas en Tiempo Real
-
-Aplicacion web para el reconocimiento de lengua de senas mediante vision por computadora e inteligencia artificial. El sistema captura video desde la camara del navegador, detecta las manos del usuario y clasifica las senas en tiempo real, mostrando el texto reconocido en pantalla.
-
----
+<img src="https://github.com/user-attachments/assets/a3346609-2afd-4bfd-9302-55afb67b9055" alt="SignLang - Interfaz v0.1" width="420"/>
 
 # SignLang
 
-Sistema web de **reconocimiento y traducción de lengua de señas en tiempo real**, desarrollado mediante visión por computadora, Machine Learning, procesamiento de lenguaje natural e inteligencia artificial contextual.
+### Traductor Inteligente de Lengua de Señas en Tiempo Real
 
-SignLang captura los movimientos de la mano mediante cámara, obtiene landmarks utilizando MediaPipe, clasifica señas estáticas y dinámicas mediante modelos ONNX y construye palabras y oraciones utilizando un sistema de corrección léxica y contextual.
+**Visión por Computadora · Machine Learning · NLP · IA Contextual**
+
+---
+
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![MediaPipe](https://img.shields.io/badge/MediaPipe-Hand%20Tracking-0097A7?style=for-the-badge&logo=google&logoColor=white)](https://mediapipe.dev/)
+[![ONNX](https://img.shields.io/badge/ONNX-Runtime-005CED?style=for-the-badge&logo=onnx&logoColor=white)](https://onnxruntime.ai/)
+[![Qwen](https://img.shields.io/badge/Qwen-LLM%20Contextual-6E4AFF?style=for-the-badge)](https://github.com/QwenLM)
+[![WebSocket](https://img.shields.io/badge/WebSocket-Real--Time-010101?style=for-the-badge&logo=socketdotio&logoColor=white)](https://developer.mozilla.org/es/docs/Web/API/WebSockets_API)
+[![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-En%20Desarrollo-orange?style=for-the-badge)]()
+
+---
+
+*Sistema web de reconocimiento y traducción de lengua de señas en tiempo real mediante visión por computadora, aprendizaje automático y procesamiento de lenguaje natural.*
+
+</div>
+
+---
+
+## Diseño del Sistema
+
+<div align="center">
+<img src="https://github.com/user-attachments/assets/22325a3e-60a8-4b85-b603-4451089098ac" alt="Diseño inicial de SignLang" width="820"/>
+</div>
+
+---
+
+## Descripción General
+
+**SignLang** es una aplicación web capaz de **capturar, interpretar y traducir** lengua de señas en tiempo real. Utiliza la cámara del navegador para detectar las manos del usuario, extrae *landmarks* con **MediaPipe**, clasifica señas estáticas y dinámicas mediante modelos **ONNX** y construye palabras y oraciones aplicando un sistema de **corrección léxica y contextual** potenciado por un **LLM (Qwen)**.
+
+>  **Objetivo:** derribar barreras de comunicación entre personas sordas y oyentes mediante una interfaz accesible, precisa y en tiempo real.
 
 ---
 
 ## Contenido
 
-- [Descripción](#descripción)
-- [Características principales](#características-principales)
-- [Arquitectura](#arquitectura)
-- [Tecnologías](#tecnologías)
-- [Estructura del proyecto](#estructura-del-proyecto)
-- [Modelos utilizados](#modelos-utilizados)
-- [Requisitos](#requisitos)
-- [Instalación](#instalación)
-- [Configuración del Backend](#configuración-del-backend)
-- [Configuración del Frontend](#configuración-del-frontend)
-- [Modelo contextual Qwen](#modelo-contextual-qwen)
-- [Ejecución con CPU](#ejecución-con-cpu)
-- [Ejecución con GPU NVIDIA](#ejecución-con-gpu-nvidia)
-- [Base de datos](#base-de-datos)
-- [Sistema de aprendizaje](#sistema-de-aprendizaje)
-- [Reconocimiento de señas](#reconocimiento-de-señas)
-- [Corrección de palabras](#corrección-de-palabras)
-- [Corrección contextual](#corrección-contextual)
-- [Uso de la aplicación](#uso-de-la-aplicación)
-- [API](#api)
-- [WebSocket](#websocket)
-- [Problemas frecuentes](#problemas-frecuentes)
-- [Estado del proyecto](#estado-del-proyecto)
+- [Descripción](#-descripción-general)
+- [Características principales](#-características-principales)
+- [Arquitectura](#-arquitectura)
+- [Tecnologías](#-tecnologías)
+- [Estructura del proyecto](#-estructura-del-proyecto)
+- [Modelos utilizados](#-modelos-utilizados)
+- [Requisitos](#-requisitos)
+- [Instalación](#-instalación)
+- [Configuración del Backend](#-configuración-del-backend)
+- [Configuración del Frontend](#-configuración-del-frontend)
+- [Modelo contextual Qwen](#-modelo-contextual-qwen)
+- [Ejecución con CPU](#-ejecución-con-cpu)
+- [Ejecución con GPU NVIDIA](#-ejecución-con-gpu-nvidia)
+- [Base de datos](#-base-de-datos)
+- [Sistema de aprendizaje](#-sistema-de-aprendizaje)
+- [Reconocimiento de señas](#-reconocimiento-de-señas)
+- [Corrección de palabras](#-corrección-de-palabras)
+- [Corrección contextual](#-corrección-contextual)
+- [Uso de la aplicación](#-uso-de-la-aplicación)
+- [API](#-api)
+- [WebSocket](#-websocket)
+- [Problemas frecuentes](#-problemas-frecuentes)
+- [Estado del proyecto](#-estado-del-proyecto)
 
 ---
 
@@ -166,6 +188,7 @@ Hola, ¿cómo están? Hoy hace frío.
                        PALABRAS CORREGIDAS
                                │
                                ▼
+                    (Instalacion Opcional)
                     ┌─────────────────────┐
                     │     Qwen3-0.6B      │
                     │ Corrección contexto │
