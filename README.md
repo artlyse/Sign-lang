@@ -208,6 +208,12 @@ Hola, ¿cómo están? Hoy hace frío.
 
 ---
 
+## Estructura del modelo de aprendizaje
+
+<img width="1536" height="1024" alt="Estructura del directorio ai-training" src="https://github.com/user-attachments/assets/8a136193-5578-43ab-9186-59d6006d174f" />
+
+---
+
 # Modelos utilizados
 
 ## MediaPipe Hand Landmarker
