@@ -7,6 +7,12 @@
 ### Traductor Inteligente de Lengua de Señas mediante
 ### Machine Learning y Visión por Computadora
 
+Equipo:
+
+<img width="960" height="480" alt="autores_signlang_glitch_10mb" src="https://github.com/user-attachments/assets/dd25f904-c089-4220-95d4-adadba78929d" />
+
+---
+
 **Visión por Computadora · Machine Learning · NLP · IA Contextual**
 
 ---
@@ -1423,49 +1429,7 @@ significa que el `StandardScaler` fue guardado con una versión diferente de sci
 
 ## Flujo técnico final
 
-```text
-┌─────────────┐
-│   CÁMARA    │
-└──────┬──────┘
-       ▼
-┌─────────────┐
-│  MEDIAPIPE  │
-└──────┬──────┘
-       ▼
- LANDMARKS
-       │
- ┌─────┴─────┐
- ▼           ▼
-MLP         LSTM
- │           │
- └─────┬─────┘
-       ▼
- RECONOCIMIENTO
-       ▼
- ESTABILIZACIÓN
-       ▼
-    LETRAS
-       ▼
-   PALABRAS
-       ▼
-┌───────────────────┐
-│ Hunspell          │
-│ wordfreq          │
-│ Levenshtein       │
-│ matriz errores    │
-│ contexto          │
-│ aprendizaje       │
-└────────┬──────────┘
-         ▼
-PALABRAS CORREGIDAS
-         ▼
-   Qwen3-0.6B
-    CPU / CUDA
-         ▼
- ORACIÓN CONTEXTUAL
-         ▼
-      USUARIO
-```
+<img width="720" height="1600" alt="signlang_flujo_animado" src="https://github.com/user-attachments/assets/b4377a11-521c-4201-bd55-1a1dee6ffa4e" />
 
 ---
 
@@ -1512,9 +1476,9 @@ Actualmente SignLang dispone de:
 
 | Nombre | Rol | Contacto |
 |---|---|---|
-| Chacon Mayta Frans Rooswvelt | Desarrollador principal | — |
-| — | — | — |
-| — | — | — |
+| Chacon Mayta Frans Rooswvelt | Desarrollador principal | - |
+| Mamani Pineda Geremias Levi | Desarrollador Frontend | - |
+| Postigo Chumacero | Alvaro Zahid | DATA/AI |
 
 Proyecto desarrollado como parte de una propuesta de **Traductor Inteligente de Lengua de Señas mediante Machine Learning y Visión por Computadora**.
 
