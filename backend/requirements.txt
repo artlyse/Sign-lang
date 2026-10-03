@@ -1,0 +1,25 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+pydantic-settings
+python-jose[cryptography]
+pwdlib[argon2]
+python-multipart
+websockets
+onnxruntime
+numpy
+joblib
+python-dotenv
+rapidfuzz
+wordfreq
+spylls
+scikit-learn
+# Solo necesario cuando uses PostgreSQL:
+# psycopg[binary]  # descomenta/instala cuando uses PostgreSQL
+email-validator
+torch>=2.10.0
+transformers>=4.51.0
+accelerate>=1.0.0
+safetensors>=0.5.0
+huggingface-hub>=0.34.0
