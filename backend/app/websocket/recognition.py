@@ -348,6 +348,22 @@ async def websocket_recognition(websocket: WebSocket):
                         },
                     )
 
+                elif mode == "replace_sentence_word":
+                    language_state = await asyncio.to_thread(
+                        language_session.replace_sentence_word,
+                        int(data.get("index", -1)),
+                        str(data.get("word", "")),
+                    )
+                    await _safe_send(
+                        websocket,
+                        {
+                            "kind": "language",
+                            "mode": "language",
+                            "status": "sentence_word_replaced",
+                            "language": language_state,
+                        },
+                    )
+
                 elif mode == "correct_last_word":
                     language_state = await asyncio.to_thread(
                         language_session.correct_last_word,

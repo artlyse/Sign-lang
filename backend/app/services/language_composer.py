@@ -29,6 +29,9 @@ class LanguageComposerSession:
     def __init__(self):
         self.raw_word = ""
         self.sentence_words = []
+        # Metadatos paralelos a sentence_words. Cada entrada conserva la
+        # captura original y las sugerencias disponibles para esa palabra.
+        self.sentence_items = []
         self.suggestions = []
 
         self.candidate_letter: Optional[str] = None
@@ -47,6 +50,10 @@ class LanguageComposerSession:
         # Una palabra autocorregida NO entrena al sistema hasta que el usuario
         # confirme que fue correcta o escriba la correccion real.
         self.pending_feedback: Optional[dict] = None
+
+        # Conserva la última palabra finalizada y sus sugerencias para que el
+        # usuario pueda cambiarla después de haberla agregado a la oración.
+        self.last_finalized: Optional[dict] = None
 
     def _context_words(self):
         return list(self.sentence_words[-2:])
@@ -341,6 +348,15 @@ class LanguageComposerSession:
 
         self.sentence_words.append(chosen)
 
+        sentence_item = {
+            "raw": raw,
+            "word": chosen,
+            "predicted": chosen,
+            "context_words": list(context_before),
+            "suggestions": [dict(item) for item in suggestions[:5]],
+        }
+        self.sentence_items.append(sentence_item)
+
         self.pending_feedback = {
             "raw": raw,
             "predicted": chosen,
@@ -353,6 +369,8 @@ class LanguageComposerSession:
                 resolution.get("raw_is_dictionary_word", False)
             ),
         }
+
+        self.last_finalized = dict(sentence_item)
 
         self.last_event = {
             "type": "word_finalized",
@@ -375,40 +393,195 @@ class LanguageComposerSession:
         return self.state()
 
     def choose_suggestion(self, word: str) -> dict:
+        """
+        Si hay una palabra en construcción, la sugerencia finaliza esa palabra.
+        Si no hay palabra en construcción, la sugerencia pertenece a la última
+        palabra finalizada y la reemplaza dentro de la oración.
+        """
         requested_key = language_service.normalize_key(word)
+
+        # -------------------------------------------------------------
+        # Caso A: sugerencias de la palabra que se está formando ahora.
+        # -------------------------------------------------------------
+        if self.raw_word:
+            allowed = {
+                language_service.normalize_key(item["word"]): item["word"]
+                for item in self.suggestions
+            }
+
+            chosen = allowed.get(requested_key)
+            if not chosen:
+                return self.state(
+                    error="La sugerencia seleccionada ya no esta disponible"
+                )
+
+            raw = self.raw_word
+            context_before = self._context_words()
+            predicted = self.suggestions[0]["word"] if self.suggestions else raw
+            current_suggestions = [dict(item) for item in self.suggestions[:5]]
+
+            learning_result = language_service.learn_from_feedback(
+                raw=raw,
+                correct=chosen,
+                context_words=context_before,
+                predicted=predicted,
+                source="suggestion_click",
+            )
+
+            self.sentence_words.append(chosen)
+            sentence_item = {
+                "raw": raw,
+                "word": chosen,
+                "predicted": predicted,
+                "context_words": list(context_before),
+                "suggestions": current_suggestions,
+            }
+            self.sentence_items.append(sentence_item)
+            self.pending_feedback = None
+            self.last_finalized = dict(sentence_item)
+            self.last_event = {
+                "type": "word_selected",
+                "raw": raw,
+                "word": chosen,
+                "learning": learning_result,
+            }
+
+            self._reset_current_word_state()
+            return self.state()
+
+        # -------------------------------------------------------------
+        # Caso B: la palabra ya fue guardada. Conservamos sus sugerencias
+        # para permitir cambiar solamente la última palabra de la oración.
+        # -------------------------------------------------------------
+        if not self.sentence_words or not self.last_finalized:
+            return self.state(error="No hay una palabra reciente para cambiar")
+
+        stored_suggestions = self.last_finalized.get("suggestions", [])
         allowed = {
             language_service.normalize_key(item["word"]): item["word"]
-            for item in self.suggestions
+            for item in stored_suggestions
         }
 
         chosen = allowed.get(requested_key)
         if not chosen:
             return self.state(
-                error="La sugerencia seleccionada ya no esta disponible"
+                error="La sugerencia de la ultima palabra ya no esta disponible"
             )
 
-        raw = self.raw_word
-        context_before = self._context_words()
-        predicted = self.suggestions[0]["word"] if self.suggestions else raw
+        old_word = self.sentence_words[-1]
+        raw = str(self.last_finalized.get("raw", old_word))
+        predicted = str(
+            self.last_finalized.get("predicted")
+            or self.last_finalized.get("word")
+            or old_word
+        )
+        context_before = list(
+            self.last_finalized.get("context_words", [])
+        )
+
+        # Si el usuario pulsa la palabra que ya estaba seleccionada no hacemos
+        # una corrección innecesaria.
+        if language_service.normalize_key(old_word) == requested_key:
+            self.last_event = {
+                "type": "last_word_unchanged",
+                "raw": raw,
+                "word": old_word,
+            }
+            return self.state()
+
+        self.sentence_words[-1] = chosen
+        if self.sentence_items:
+            self.sentence_items[-1]["word"] = chosen
 
         learning_result = language_service.learn_from_feedback(
             raw=raw,
             correct=chosen,
             context_words=context_before,
             predicted=predicted,
-            source="suggestion_click",
+            source="last_word_suggestion_click",
         )
 
-        self.sentence_words.append(chosen)
+        # Ya hubo una decisión explícita del usuario: no queda feedback
+        # implícito pendiente para esa palabra.
         self.pending_feedback = None
+        self.last_finalized["word"] = chosen
+        self.last_finalized["predicted"] = predicted
+
         self.last_event = {
-            "type": "word_selected",
+            "type": "last_word_replaced",
             "raw": raw,
+            "previous_word": old_word,
             "word": chosen,
             "learning": learning_result,
         }
+        return self.state()
 
-        self._reset_current_word_state()
+    def replace_sentence_word(self, index: int, word: str) -> dict:
+        """
+        Reemplaza cualquier palabra ya finalizada usando únicamente una de
+        las sugerencias que quedaron registradas para esa palabra.
+        """
+        try:
+            index = int(index)
+        except (TypeError, ValueError):
+            return self.state(error="Indice de palabra invalido")
+
+        if index < 0 or index >= len(self.sentence_words):
+            return self.state(error="La palabra seleccionada ya no existe")
+
+        if index >= len(self.sentence_items):
+            return self.state(error="No hay sugerencias guardadas para esa palabra")
+
+        item = self.sentence_items[index]
+        requested_key = language_service.normalize_key(word)
+
+        allowed = {
+            language_service.normalize_key(entry.get("word", "")): entry.get("word", "")
+            for entry in item.get("suggestions", [])
+            if entry.get("word")
+        }
+
+        chosen = allowed.get(requested_key)
+        if not chosen:
+            return self.state(error="Esa sugerencia no pertenece a la palabra seleccionada")
+
+        previous_word = self.sentence_words[index]
+        if language_service.normalize_key(previous_word) == requested_key:
+            self.last_event = {
+                "type": "sentence_word_unchanged",
+                "index": index,
+                "word": previous_word,
+            }
+            return self.state()
+
+        raw = str(item.get("raw") or previous_word)
+        predicted = str(item.get("predicted") or previous_word)
+        context_before = list(item.get("context_words", []))
+
+        self.sentence_words[index] = chosen
+        item["word"] = chosen
+
+        # Mantener compatibilidad con la referencia de la última palabra.
+        if index == len(self.sentence_words) - 1 and self.last_finalized:
+            self.last_finalized["word"] = chosen
+
+        learning_result = language_service.learn_from_feedback(
+            raw=raw,
+            correct=chosen,
+            context_words=context_before,
+            predicted=predicted,
+            source="sentence_word_suggestion_click",
+        )
+
+        self.pending_feedback = None
+        self.last_event = {
+            "type": "sentence_word_replaced",
+            "index": index,
+            "raw": raw,
+            "previous_word": previous_word,
+            "word": chosen,
+            "learning": learning_result,
+        }
         return self.state()
 
     def confirm_learning(self) -> dict:
@@ -446,6 +619,12 @@ class LanguageComposerSession:
 
         if self.sentence_words:
             self.sentence_words[-1] = corrected
+
+        if self.sentence_items:
+            self.sentence_items[-1]["word"] = corrected
+
+        if self.last_finalized:
+            self.last_finalized["word"] = corrected
 
         learning_result = language_service.learn_from_feedback(
             raw=feedback["raw"],
@@ -491,8 +670,15 @@ class LanguageComposerSession:
             }
         elif self.sentence_words:
             removed = self.sentence_words.pop()
+            if self.sentence_items:
+                self.sentence_items.pop()
             if self.pending_feedback:
                 self.pending_feedback = None
+            self.last_finalized = (
+                dict(self.sentence_items[-1])
+                if self.sentence_items
+                else None
+            )
             self.last_event = {
                 "type": "word_removed",
                 "word": removed,
@@ -503,6 +689,7 @@ class LanguageComposerSession:
     def clear(self) -> dict:
         self.raw_word = ""
         self.sentence_words = []
+        self.sentence_items = []
         self.suggestions = []
         self.candidate_letter = None
         self.candidate_mode = None
@@ -511,6 +698,7 @@ class LanguageComposerSession:
         self.last_accepted_letter = None
         self.same_letter_locked = False
         self.pending_feedback = None
+        self.last_finalized = None
         self.last_event = {"type": "cleared"}
         return self.state()
 
@@ -527,14 +715,54 @@ class LanguageComposerSession:
         else:
             display_text = sentence or resolved
 
+        # Mientras se forma una palabra mostramos sus sugerencias. Cuando se
+        # finaliza, seguimos mostrando las sugerencias de esa última palabra.
+        if self.raw_word:
+            visible_suggestions = list(self.suggestions)
+            suggestion_scope = "current"
+            suggestion_source_word = resolved or self.raw_word
+        elif self.last_finalized:
+            visible_suggestions = list(
+                self.last_finalized.get("suggestions", [])
+            )
+            suggestion_scope = "last_finalized"
+            suggestion_source_word = str(
+                self.last_finalized.get("word", "")
+            )
+        else:
+            visible_suggestions = []
+            suggestion_scope = "none"
+            suggestion_source_word = ""
+
         result = {
             "raw_word": self.raw_word,
             "resolved_word": resolved,
             "preview_word": preview,
             "autocorrect_active": bool(resolution.get("autocorrected", False)),
             "resolution_reason": resolution.get("reason"),
-            "suggestions": self.suggestions,
+            "suggestions": visible_suggestions,
+            "suggestion_scope": suggestion_scope,
+            "suggestion_source_word": suggestion_source_word,
+            "last_finalized_word": (
+                str(self.last_finalized.get("word", ""))
+                if self.last_finalized
+                else ""
+            ),
             "sentence_words": list(self.sentence_words),
+            "sentence_items": [
+                {
+                    "index": index,
+                    "raw": str(item.get("raw", "")),
+                    "word": self.sentence_words[index]
+                    if index < len(self.sentence_words)
+                    else str(item.get("word", "")),
+                    "suggestions": [
+                        dict(suggestion)
+                        for suggestion in item.get("suggestions", [])
+                    ],
+                }
+                for index, item in enumerate(self.sentence_items)
+            ],
             "sentence": sentence,
             "display_text": display_text,
             "event": self.last_event,
