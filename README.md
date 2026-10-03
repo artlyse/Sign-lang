@@ -31,7 +31,7 @@ Machine Learning y Visión por Computadora
 ## Diseño del Sistema
 
 <div align="center">
-<img src="https://github.com/user-attachments/assets/22325a3e-60a8-4b85-b603-4451089098ac" alt="Diseño inicial de SignLang" width="820"/>
+<img width="1898" height="1079" alt="image" src="https://github.com/user-attachments/assets/bd5a07b2-6d37-4c59-8c83-a35cde2ee86e" />
 </div>
 
 ---
@@ -1752,3 +1752,11 @@ Machine Learning y Visión por Computadora.
 
 **Traductor Inteligente de Lengua de Señas mediante
 Machine Learning y Visión por Computadora**
+
+## Logs/Historial
+
+## Diseño del Sistema Version 0.1
+
+<div align="center">
+<img src="https://github.com/user-attachments/assets/22325a3e-60a8-4b85-b603-4451089098ac" alt="Diseño inicial de SignLang" width="820"/>
+</div>
