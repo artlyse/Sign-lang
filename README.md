@@ -200,12 +200,11 @@ Hola, ¿cómo están? Hoy hace frío.
 - SQLAlchemy
 
 ---
+```
 
-# Estructura del proyecto
+## Estructura del proyecto
 
 <img width="1312" height="1199" alt="VS COD" src="https://github.com/user-attachments/assets/078fc453-957f-43c8-9f1f-7d124e1269fd" />
-
-```
 
 ---
 
