@@ -1,1 +1,0 @@
-# Reconocedor dos manos 

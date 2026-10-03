@@ -1,1 +1,0 @@
-# Script de entrenamiento MLP 
