@@ -42,6 +42,13 @@ type Suggestion = {
   completion?: boolean;
 };
 
+type SentenceItem = {
+  index: number;
+  raw: string;
+  word: string;
+  suggestions: Suggestion[];
+};
+
 type PendingFeedback = {
   raw: string;
   predicted: string;
@@ -87,7 +94,11 @@ type LanguageState = {
   autocorrect_active?: boolean;
   resolution_reason?: string;
   suggestions: Suggestion[];
+  suggestion_scope?: "current" | "last_finalized" | "none";
+  suggestion_source_word?: string;
+  last_finalized_word?: string;
   sentence_words: string[];
+  sentence_items?: SentenceItem[];
   sentence: string;
   display_text: string;
   event: LanguageEvent;
@@ -101,7 +112,11 @@ const EMPTY_LANGUAGE_STATE: LanguageState = {
   preview_word: "",
   autocorrect_active: false,
   suggestions: [],
+  suggestion_scope: "none",
+  suggestion_source_word: "",
+  last_finalized_word: "",
   sentence_words: [],
+  sentence_items: [],
   sentence: "",
   display_text: "",
   event: null,
@@ -144,9 +159,15 @@ function Translator() {
     EMPTY_LANGUAGE_STATE,
   );
   const [manualCorrection, setManualCorrection] = useState("");
+  const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [aiSentence, setAiSentence] = useState("");
   const [aiCorrecting, setAiCorrecting] = useState(false);
   const [aiCorrectionError, setAiCorrectionError] = useState("");
+
+  const selectedSentenceItem =
+    selectedWordIndex !== null
+      ? language.sentence_items?.[selectedWordIndex] ?? null
+      : null;
 
   const sendCommand = (payload: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -420,6 +441,8 @@ function Translator() {
 
   const elegirSugerencia = (word: string) => {
     cancelWordGapTimer();
+    setAiSentence("");
+    setAiCorrectionError("");
     sendCommand({
       mode: "choose_suggestion",
       word,
@@ -440,9 +463,23 @@ function Translator() {
     });
   };
 
+  const elegirSugerenciaDePalabra = (word: string) => {
+    if (selectedWordIndex === null) return;
+
+    setAiSentence("");
+    setAiCorrectionError("");
+
+    sendCommand({
+      mode: "replace_sentence_word",
+      index: selectedWordIndex,
+      word,
+    });
+  };
+
   const borrarUltimo = () => {
     cancelWordGapTimer();
     setAiSentence("");
+    setSelectedWordIndex(null);
     sendCommand({ mode: "backspace_language" });
   };
 
@@ -451,6 +488,7 @@ function Translator() {
     setManualCorrection("");
     setAiSentence("");
     setAiCorrectionError("");
+    setSelectedWordIndex(null);
     sendCommand({ mode: "clear_language" });
   };
 
@@ -584,7 +622,11 @@ function Translator() {
         </div>
 
         <div className="language-suggestions">
-          <span className="language-suggestions-label">Sugerencias</span>
+          <span className="language-suggestions-label">
+            {language.suggestion_scope === "last_finalized"
+              ? `Sugerencias para la última palabra: ${language.suggestion_source_word || ""}`
+              : "Sugerencias"}
+          </span>
 
           <div className="language-suggestion-buttons">
             {language.suggestions.length > 0 ? (
@@ -601,7 +643,9 @@ function Translator() {
               ))
             ) : (
               <span className="language-no-suggestions">
-                Escribe al menos dos letras para obtener sugerencias.
+                {language.suggestion_scope === "last_finalized"
+                  ? "No hay alternativas guardadas para la última palabra."
+                  : "Escribe al menos dos letras para obtener sugerencias."}
               </span>
             )}
           </div>
@@ -612,9 +656,86 @@ function Translator() {
             !language.display_text ? "empty" : ""
           }`}
         >
-          {language.display_text ||
-            "La oracion corregida aparecera aqui..."}
+          {language.sentence_words.length > 0 ? (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "8px",
+                alignItems: "center",
+              }}
+            >
+              {language.sentence_words.map((word, index) => (
+                <button
+                  key={`${index}-${word}`}
+                  type="button"
+                  onClick={() => setSelectedWordIndex(index)}
+                  title="Haz clic para ver sugerencias de esta palabra"
+                  style={{
+                    border:
+                      selectedWordIndex === index
+                        ? "2px solid currentColor"
+                        : "1px solid rgba(128, 128, 128, 0.35)",
+                    borderRadius: "10px",
+                    padding: "7px 10px",
+                    background:
+                      selectedWordIndex === index
+                        ? "rgba(128, 128, 128, 0.16)"
+                        : "transparent",
+                    cursor: "pointer",
+                    font: "inherit",
+                    fontWeight: 700,
+                  }}
+                >
+                  {word}
+                </button>
+              ))}
+
+              {language.resolved_word && (
+                <span style={{ fontWeight: 700 }}>
+                  {language.resolved_word}
+                </span>
+              )}
+            </div>
+          ) : (
+            language.resolved_word ||
+            "La oracion corregida aparecera aqui..."
+          )}
         </div>
+
+        {selectedSentenceItem && (
+          <div className="language-suggestions">
+            <span className="language-suggestions-label">
+              Sugerencias para: {selectedSentenceItem.word}
+              {selectedSentenceItem.raw &&
+              selectedSentenceItem.raw !== selectedSentenceItem.word
+                ? ` · capturado: ${selectedSentenceItem.raw}`
+                : ""}
+            </span>
+
+            <div className="language-suggestion-buttons">
+              {selectedSentenceItem.suggestions.length > 0 ? (
+                selectedSentenceItem.suggestions.map((suggestion) => (
+                  <button
+                    type="button"
+                    key={`selected-${selectedSentenceItem.index}-${suggestion.word}-${suggestion.score}`}
+                    onClick={() =>
+                      elegirSugerenciaDePalabra(suggestion.word)
+                    }
+                    title={`Score ${(suggestion.score * 100).toFixed(1)}%`}
+                  >
+                    <strong>{suggestion.word}</strong>
+                    <span>{(suggestion.score * 100).toFixed(0)}%</span>
+                  </button>
+                ))
+              ) : (
+                <span className="language-no-suggestions">
+                  No hay sugerencias guardadas para esta palabra.
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="language-word-grid">
           <div className="language-word-card corrected">
@@ -635,6 +756,22 @@ function Translator() {
         {language.event?.type === "word_finalized" && (
           <div className="language-event-message">
             Palabra agregada: {String(language.event.word ?? "")}
+          </div>
+        )}
+
+        {language.event?.type === "last_word_replaced" && (
+          <div className="language-event-message">
+            Última palabra cambiada: {String(language.event.previous_word ?? "")}
+            {" → "}
+            {String(language.event.word ?? "")}
+          </div>
+        )}
+
+        {language.event?.type === "sentence_word_replaced" && (
+          <div className="language-event-message">
+            Palabra cambiada: {String(language.event.previous_word ?? "")}
+            {" → "}
+            {String(language.event.word ?? "")}
           </div>
         )}
 
