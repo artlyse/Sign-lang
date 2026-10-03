@@ -1,0 +1,10 @@
+# Requirements 
+opencv-python
+mediapipe
+numpy
+torch
+scikit-learn
+onnx
+onnxruntime
+matplotlib
+seaborn
