@@ -4,7 +4,8 @@
 
 # SignLang
 
-### Traductor Inteligente de Lengua de Señas en Tiempo Real
+### Traductor Inteligente de Lengua de Señas mediante
+Machine Learning y Visión por Computadora
 
 **Visión por Computadora · Machine Learning · NLP · IA Contextual**
 
