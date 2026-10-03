@@ -1,31 +1,359 @@
-# Git ignore 
-# Python
+# ============================================================
+# SIGNLANG - .gitignore - ACTUALIZACION PARA NO REINICIAR TODO OTRA VEZ :V
+# ============================================================
+
+
+# ============================================================
+# PYTHON
+# ============================================================
+
 __pycache__/
 *.py[cod]
-venv/
-venv_ai/
-*.egg-info/
-.pytest_cache/
-.env
+*$py.class
+*.pyo
+*.pyd
 
-# Node
-node_modules/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+*.egg
+*.egg-info/
+.eggs/
+
+build/
 dist/
-dist-ssr/
+downloads/
+wheels/
+
+
+# ============================================================
+# PYTHON VIRTUAL ENVIRONMENTS
+# ============================================================
+
+venv/
+.venv/
+env/
+ENV/
+backend/venv/
+backend/.venv/
+
+
+# ============================================================
+# ENVIRONMENT VARIABLES / SECRETS
+# ============================================================
+
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+backend/.env
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# Mantener los ejemplos
+!.env.example
+!backend/.env.example
+!frontend/.env.example
+
+
+# ============================================================
+# SQLITE / DATABASE
+# ============================================================
+
+*.db
+*.sqlite
+*.sqlite3
+
+backend/data/app.db
+backend/data/*.db
+
+*.db-shm
+*.db-wal
+*.db-journal
+
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+
+
+# ============================================================
+# QWEN / HUGGING FACE MODELS
+# ============================================================
+
+backend/data/models/
+backend/data/models/**
+
+# Cache Hugging Face
+.cache/
+huggingface/
+.huggingface/
+
+**/.cache/huggingface/
+**/huggingface/hub/
+
+# Archivos grandes típicos de LLM
+*.safetensors
+*.gguf
+*.ggml
+
+
+# ============================================================
+# MACHINE LEARNING - ARCHIVOS GENERADOS EN RUNTIME
+# ============================================================
+
+# Ranker que aprende durante el uso
+backend/app/ml/*.joblib
+
+# Datos de aprendizaje generados localmente
+backend/app/data/learning/
+backend/app/data/learning/**
+
+# Logs/datasets temporales de aprendizaje
+*.jsonl
+
+
+# ============================================================
+# IMPORTANTE: NO IGNORAR LOS MODELOS DE RECONOCIMIENTO
+# ============================================================
+
+# Estos modelos SI deben poder subirse al repositorio:
+!backend/app/ai/models/
+!backend/app/ai/models/*.onnx
+!backend/app/ai/models/*.onnx.data
+!backend/app/ai/models/*.pkl
+
+
+# ============================================================
+# HUNSPELL
+# ============================================================
+
+# Los diccionarios necesarios para el proyecto se conservan.
+!backend/app/data/hunspell/
+!backend/app/data/hunspell/es_PE.aff
+!backend/app/data/hunspell/es_PE.dic
+
+
+# ============================================================
+# NODE / REACT / VITE
+# ============================================================
+
+node_modules/
+frontend/node_modules/
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
-# Base de datos
-*.db
-*.sqlite3
+.npm/
+.pnpm-store/
 
-# Modelos grandes
-*.onnx
-*.pt
-*.pkl
-*.task
+frontend/dist/
+frontend/build/
 
-# Sistema
-.DS_Store
+.vite/
+frontend/.vite/
+
+*.tsbuildinfo
+
+
+# ============================================================
+# FRONTEND COVERAGE / CACHE
+# ============================================================
+
+coverage/
+frontend/coverage/
+
+.eslintcache
+.stylelintcache
+
+
+# ============================================================
+# LOGS
+# ============================================================
+
+*.log
+logs/
+backend/logs/
+frontend/logs/
+
+*.log.*
+debug.log
+
+
+# ============================================================
+# TEMPORARY FILES
+# ============================================================
+
+tmp/
+temp/
+.tmp/
+.cache/
+
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+*.swp
+*.swo
+
+~$*
+*~
+
+
+# ============================================================
+# WINDOWS
+# ============================================================
+
 Thumbs.db
+Thumbs.db:encryptable
+Desktop.ini
+ehthumbs.db
+ehthumbs_vista.db
+
+$RECYCLE.BIN/
+
+*.lnk
+
+
+# ============================================================
+# MACOS
+# ============================================================
+
+.DS_Store
+.AppleDouble
+.LSOverride
+
+._*
+
+
+# ============================================================
+# LINUX
+# ============================================================
+
+.directory
+.Trash-*
+
+
+# ============================================================
+# VS CODE
+# ============================================================
+
+.vscode/
+
+# Si deseas compartir algunas configuraciones:
+!.vscode/settings.example.json
+
+
+# ============================================================
+# JETBRAINS / PYCHARM / WEBSTORM
+# ============================================================
+
+.idea/
+*.iml
+*.ipr
+*.iws
+
+
+# ============================================================
+# VISUAL STUDIO
+# ============================================================
+
+.vs/
+
+
+# ============================================================
+# JUPYTER
+# ============================================================
+
+.ipynb_checkpoints/
+
+
+# ============================================================
+# PYTHON TYPE CHECKERS / LANGUAGE SERVERS
+# ============================================================
+
+.pyright/
+.dmypy.json
+dmypy.json
+
+
+# ============================================================
+# LOCAL USER FILES
+# ============================================================
+
+uploads/
+backend/uploads/
+
+user_data/
+backend/user_data/
+
+
+# ============================================================
+# GENERATED EXPORTS
+# ============================================================
+
+exports/
+backend/exports/
+
+output/
+outputs/
+
+
+# ============================================================
+# COMPRESSED / BACKUP FILES
+# ============================================================
+
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+
+
+# ============================================================
+# PROJECT-SPECIFIC BACKUPS
+# ============================================================
+
+backup/
+backups/
+
+*_backup/
+*_old/
+
+
+# ============================================================
+# DO NOT IGNORE SOURCE CODE
+# ============================================================
+
+!backend/app/
+!backend/app/**
+
+!frontend/src/
+!frontend/src/**
+
+!backend/scripts/
+!backend/scripts/**
+
+
+# ============================================================
+# IMPORTANT PROJECT FILES
+# ============================================================
+
+!backend/requirements.txt
+!frontend/package.json
+!frontend/package-lock.json
+
+!README.md
+!LICENSE
+
+!.gitignore
