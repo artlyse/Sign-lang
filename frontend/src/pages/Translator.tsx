@@ -8,10 +8,10 @@ import useSpeechRecognition from "../hooks/useSpeechRecognition";
 const WS_URL = "ws://localhost:8000/ws/recognition";
 
 const buildWsUrl = () => {
-  const token = window.localStorage.getItem("signlang_access_token");
-  if (!token) return WS_URL;
-  const separator = WS_URL.includes("?") ? "&" : "?";
-  return `${WS_URL}${separator}token=${encodeURIComponent(token)}`;
+const token = window.localStorage.getItem("signlang_access_token");
+if (!token) return WS_URL;
+const separator = WS_URL.includes("?") ? "&" : "?";
+return `${WS_URL}${separator}token=${encodeURIComponent(token)}`;
 };
 
 const MODEL_URL = "/hand_landmarker.task";
@@ -124,6 +124,7 @@ function Translator() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const landmarkerRef = useRef<HandLandmarker | null>(null);
   const animationRef = useRef<number>(0);
@@ -140,6 +141,10 @@ function Translator() {
     useState<RecognitionMode>("none");
   const [status, setStatus] = useState("Iniciando...");
   const [connected, setConnected] = useState(false);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCamera, setSelectedCamera] = useState("");
+  const [cameraFacing, setCameraFacing] =
+    useState<"user" | "environment">("user");
   const [language, setLanguage] = useState<LanguageState>(
     EMPTY_LANGUAGE_STATE,
   );
@@ -181,9 +186,26 @@ function Translator() {
       wordGapTimerRef.current = null;
     }, WORD_GAP_MS);
   };
+const loadCameras = async () => {
+  try {
+    const devices =
+      await navigator.mediaDevices.enumerateDevices();
 
+    const videoDevices = devices.filter(
+      (device) => device.kind === "videoinput"
+    );
+
+    setCameras(videoDevices);
+
+    return videoDevices;
+  } catch (error) {
+    console.error("Error detectando cámaras:", error);
+    return [];
+  }
+};
   useEffect(() => {
     let stream: MediaStream | null = null;
+    let cancelled = false;
 
     const detectLoop = () => {
       const video = videoRef.current;
@@ -275,127 +297,268 @@ function Translator() {
       animationRef.current = requestAnimationFrame(detectLoop);
     };
 
-    const initialize = async () => {
+
+const initialize = async () => {
+  try {
+    // =====================================
+    // 1. CONEXIÓN CON EL BACKEND
+    // =====================================
+    const ws = new WebSocket(buildWsUrl());
+
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      if (cancelled) return;
+
+      releaseFrame();
+      setConnected(true);
+      setStatus("Backend conectado");
+
+      ws.send(
+        JSON.stringify({ mode: "get_language_state" })
+      );
+    };
+
+    ws.onclose = () => {
+      if (cancelled) return;
+
+      releaseFrame();
+      setConnected(false);
+      setStatus("Backend desconectado");
+    };
+
+    ws.onerror = () => {
+      if (cancelled) return;
+
+      releaseFrame();
+      setConnected(false);
+      setStatus("Error de conexión con backend");
+    };
+
+    ws.onmessage = (event) => {
+      if (cancelled) return;
+
       try {
-        const ws = new WebSocket(buildWsUrl());
+        const data = JSON.parse(event.data);
 
-        ws.onopen = () => {
+        if (
+          data.kind === "recognition" ||
+          data.letter !== undefined
+        ) {
           releaseFrame();
-          setConnected(true);
-          setStatus("Backend conectado");
-          ws.send(JSON.stringify({ mode: "get_language_state" }));
-        };
-
-        ws.onclose = () => {
-          releaseFrame();
-          setConnected(false);
-          setStatus("Backend desconectado");
-        };
-
-        ws.onerror = () => {
-          releaseFrame();
-          setConnected(false);
-          setStatus("Error de conexion con backend");
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-
-            // El backend responde primero la inferencia visual. Esto libera
-            // inmediatamente el siguiente frame y evita acumular retraso.
-            if (data.kind === "recognition" || data.letter !== undefined) {
-              releaseFrame();
-            }
-
-            if (typeof data.letter === "string") {
-              setLetter(data.letter || "-");
-              setConfidence(Number(data.confidence ?? 0));
-              setRecognitionMode(
-                data.mode === "dynamic"
-                  ? "dynamic"
-                  : data.mode === "static"
-                    ? "static"
-                    : "none",
-              );
-            }
-
-            if (data.language) {
-              setLanguage(data.language as LanguageState);
-            }
-
-            if (data.kind === "sentence_correction") {
-              setAiCorrecting(false);
-              const correction = data.sentence_correction;
-              if (correction?.corrected) {
-                setAiSentence(String(correction.corrected));
-                setAiCorrectionError("");
-              } else {
-                setAiCorrectionError("No se pudo generar una corrección contextual.");
-              }
-            }
-
-            if (data.error) {
-              setAiCorrecting(false);
-              if (String(data.error).toLowerCase().includes("modelo contextual")
-                  || String(data.error).toLowerCase().includes("torch")
-                  || String(data.error).toLowerCase().includes("transform")) {
-                setAiCorrectionError(String(data.error));
-              }
-              releaseFrame();
-              console.warn("Backend:", data.error);
-              setStatus(`Backend: ${String(data.error)}`);
-            }
-          } catch (error) {
-            console.error("Respuesta WebSocket invalida:", error);
-          }
-        };
-
-        wsRef.current = ws;
-
-        setStatus("Cargando detector...");
-
-        const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
-        );
-
-        const landmarker = await HandLandmarker.createFromOptions(
-          vision,
-          {
-            baseOptions: {
-              modelAssetPath: MODEL_URL,
-              delegate: "GPU",
-            },
-            runningMode: "VIDEO",
-            numHands: 2,
-          },
-        );
-
-        landmarkerRef.current = landmarker;
-
-        setStatus("Abriendo camara...");
-
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: "user",
-          },
-          audio: false,
-        });
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
         }
 
-        setStatus("Camara activa");
-        detectLoop();
+        if (typeof data.letter === "string") {
+          setLetter(data.letter || "-");
+          setConfidence(Number(data.confidence ?? 0));
+
+          setRecognitionMode(
+            data.mode === "dynamic"
+              ? "dynamic"
+              : data.mode === "static"
+                ? "static"
+                : "none"
+          );
+        }
+
+        if (data.language) {
+          setLanguage(data.language as LanguageState);
+        }
+
+        if (data.kind === "sentence_correction") {
+          setAiCorrecting(false);
+
+          const correction = data.sentence_correction;
+
+          if (correction?.corrected) {
+            setAiSentence(String(correction.corrected));
+            setAiCorrectionError("");
+          } else {
+            setAiCorrectionError(
+              "No se pudo generar una corrección contextual."
+            );
+          }
+        }
+
+        if (data.error) {
+          setAiCorrecting(false);
+
+          const errorMessage = String(data.error);
+
+          if (
+            errorMessage.toLowerCase().includes("modelo contextual") ||
+            errorMessage.toLowerCase().includes("torch") ||
+            errorMessage.toLowerCase().includes("transform")
+          ) {
+            setAiCorrectionError(errorMessage);
+          }
+
+          releaseFrame();
+          console.warn("Backend:", errorMessage);
+          setStatus(`Backend: ${errorMessage}`);
+        }
       } catch (error) {
-        console.error(error);
-        setStatus("No se pudo iniciar la camara");
+        console.error(
+          "Respuesta WebSocket inválida:",
+          error
+        );
       }
     };
+
+    // =====================================
+    // 2. CARGAR MEDIAPIPE
+    // =====================================
+    setStatus("Cargando detector...");
+    console.log("PASO 1: Cargando MediaPipe");
+
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm"
+    );
+
+    if (cancelled) return;
+
+    console.log(
+      "PASO 2: MediaPipe cargado correctamente"
+    );
+
+    // =====================================
+    // 3. CREAR HANDLANDMARKER
+    // =====================================
+    const landmarker =
+      await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: MODEL_URL,
+          delegate: "CPU",
+        },
+        runningMode: "VIDEO",
+        numHands: 2,
+      });
+
+    if (cancelled) {
+      landmarker.close();
+      return;
+    }
+
+    landmarkerRef.current = landmarker;
+
+    console.log(
+      "PASO 3: HandLandmarker creado correctamente"
+    );
+
+    // =====================================
+    // 4. SOLICITAR ACCESO A LA CÁMARA
+    // =====================================
+    setStatus("Abriendo cámara...");
+    console.log("PASO 4: Solicitando acceso a cámara");
+
+    const newStream =
+      await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: {
+            ideal: cameraFacing,
+          },
+        },
+        audio: false,
+      });
+
+    stream = newStream;
+
+    if (cancelled) {
+      newStream.getTracks().forEach(
+        (track) => track.stop()
+      );
+      return;
+    }
+
+    streamRef.current = newStream;
+
+    // =====================================
+    // 5. IDENTIFICAR CÁMARA ACTIVA
+    // =====================================
+    const videoTrack = newStream.getVideoTracks()[0];
+
+    if (videoTrack) {
+      const settings = videoTrack.getSettings();
+
+      if (settings.deviceId) {
+        setSelectedCamera(settings.deviceId);
+      }
+
+      if (settings.facingMode === "environment") {
+        setCameraFacing("environment");
+      } else if (settings.facingMode === "user") {
+        setCameraFacing("user");
+      }
+    }
+
+    await loadCameras();
+
+    if (cancelled) return;
+
+    // =====================================
+    // 6. MOSTRAR VIDEO EN PANTALLA
+    // =====================================
+    const video = videoRef.current;
+
+    if (!video) {
+      throw new Error("No se encontró el elemento de video");
+    }
+
+    video.srcObject = newStream;
+
+    if (cancelled) return;
+
+    if (video.srcObject !== newStream) {
+      video.srcObject = newStream;
+    }
+
+    try {
+      await video.play();
+    } catch (error) {
+      if (cancelled) return;
+
+      if (
+        error instanceof DOMException &&
+        error.name === "AbortError"
+      ) {
+        console.warn(
+          "La reproducción fue interrumpida por otro cambio de cámara."
+        );
+        return;
+      }
+
+      throw error;
+    }
+
+    if (cancelled) return;
+
+    // =====================================
+    // 7. INICIAR RECONOCIMIENTO
+    // =====================================
+    console.log("PASO 5: Cámara funcionando");
+
+    setStatus("Cámara activa");
+    detectLoop();
+
+  } catch (error) {
+    if (cancelled) return;
+
+    console.error(
+      "ERROR AL INICIAR TRADUCTOR:",
+      error
+    );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : String(error);
+
+    setStatus(`Error: ${message}`);
+  }
+};
+
 
     initialize();
 
@@ -412,6 +575,69 @@ function Translator() {
       }
     };
   }, []);
+  const changeCamera = async (
+  deviceId?: string,
+  facingMode?: "user" | "environment"
+) => {
+  try {
+    setStatus("Cambiando cámara...");
+
+    streamRef.current?.getTracks().forEach(
+      (track) => track.stop()
+    );
+
+    const videoConstraints: MediaTrackConstraints =
+      deviceId
+        ? {
+            deviceId: { exact: deviceId },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          }
+        : {
+            facingMode: {
+              ideal: facingMode ?? "user",
+            },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          };
+
+    const newStream =
+      await navigator.mediaDevices.getUserMedia({
+        video: videoConstraints,
+        audio: false,
+      });
+
+    streamRef.current = newStream;
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = newStream;
+      await videoRef.current.play();
+    }
+
+    const track = newStream.getVideoTracks()[0];
+
+    if (track) {
+      const settings = track.getSettings();
+
+      if (settings.deviceId) {
+        setSelectedCamera(settings.deviceId);
+      }
+
+      if (settings.facingMode === "environment") {
+        setCameraFacing("environment");
+      } else if (settings.facingMode === "user") {
+        setCameraFacing("user");
+      }
+    }
+
+    await loadCameras();
+
+    setStatus("Cámara activa");
+  } catch (error) {
+    console.error("Error cambiando cámara:", error);
+    setStatus("No se pudo cambiar la cámara");
+  }
+};
 
   const finalizarPalabra = () => {
     cancelWordGapTimer();
@@ -492,9 +718,67 @@ function Translator() {
             </div>
             <span className="camera-live">EN VIVO</span>
           </div>
+          <div className="camera-controls">
+  <div className="camera-selector">
+    <label htmlFor="camera-select">
+      Cámara
+    </label>
+
+    <select
+      id="camera-select"
+      value={selectedCamera}
+      onChange={(event) =>
+        changeCamera(event.target.value)
+      }
+    >
+      {cameras.map((camera, index) => (
+        <option
+          key={camera.deviceId}
+          value={camera.deviceId}
+        >
+          {camera.label ||
+            `Cámara ${index + 1}`}
+        </option>
+      ))}
+    </select>
+  </div>
+
+  <div className="mobile-camera-buttons">
+    <button
+      type="button"
+      className={
+        cameraFacing === "user" ? "active" : ""
+      }
+      onClick={() =>
+        changeCamera(undefined, "user")
+      }
+    >
+      Cámara frontal
+    </button>
+
+    <button
+      type="button"
+      className={
+        cameraFacing === "environment"
+          ? "active"
+          : ""
+      }
+      onClick={() =>
+        changeCamera(undefined, "environment")
+      }
+    >
+      Cámara trasera
+    </button>
+  </div>
+</div>
 
           <div className="translator-camera">
-            <video ref={videoRef} playsInline muted />
+            <video
+  ref={videoRef}
+  autoPlay
+  playsInline
+  muted
+/>
             <canvas ref={canvasRef} width={640} height={480} />
             <div className="camera-status">{status}</div>
           </div>
