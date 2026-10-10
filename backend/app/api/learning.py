@@ -1,3 +1,5 @@
+"""Endpoints recomendados para inspeccionar aprendizaje persistido del usuario."""
+
 from fastapi import APIRouter, Depends, Query
 
 from app.core.dependencies import get_current_user

@@ -1,3 +1,9 @@
+"""Persistencia del aprendizaje lingüístico por usuario.
+
+Lee/escribe memoria adaptativa en SQLite: correcciones exactas, confusiones de
+caracteres, bigramas, trigramas y frecuencia personal. Mantiene caché por
+usuario y la invalida después de cada feedback confirmado."""
+
 import json
 import re
 import threading
@@ -16,6 +22,7 @@ from app.models.learning import (
     LearningEvent,
     RankerTrainingExample,
     UserBigram,
+    UserCorrection,
     UserConfusion,
     UserTrigram,
     UserWordStat,
@@ -28,10 +35,16 @@ class LearningService:
     """
     Aprendizaje personalizado persistido en SQL.
 
-    - Cada cuenta tiene sus propias confusiones, bigramas, trigramas y palabras.
+    - Cada cuenta tiene sus propias correcciones exactas, confusiones,
+      bigramas, trigramas y frecuencia personal de palabras.
     - El servicio mantiene una caché RAM por usuario para NO consultar SQL por
       cada candidato de Hunspell/wordfreq.
     - La caché se invalida cuando el usuario genera nuevo feedback.
+
+    Importante:
+    `UserCorrection` resuelve un hueco del diseño anterior. Una corrección como
+    HOL -> HOLA es una INSERCIÓN y no genera un par de sustitución en
+    `user_confusions`; ahora queda memorizada explícitamente como par completo.
     """
 
     def __init__(self):
@@ -113,6 +126,15 @@ class LearningService:
 
         db = SessionLocal()
         try:
+            corrections: Dict[str, Dict[str, dict]] = {}
+            for row in db.scalars(
+                select(UserCorrection).where(UserCorrection.user_id == user_id)
+            ):
+                corrections.setdefault(row.raw_word, {})[row.correct_word] = {
+                    "weight": float(row.weight_sum or 0.0),
+                    "occurrences": int(row.occurrences or 0),
+                }
+
             confusions: Dict[str, Dict[str, dict]] = {}
             for row in db.scalars(
                 select(UserConfusion).where(UserConfusion.user_id == user_id)
@@ -137,6 +159,15 @@ class LearningService:
                 key = f"{row.first_word} {row.second_word}"
                 trigrams.setdefault(key, {})[row.third_word] = float(row.weight_sum or 0.0)
 
+            word_stats: Dict[str, dict] = {}
+            for row in db.scalars(
+                select(UserWordStat).where(UserWordStat.user_id == user_id)
+            ):
+                word_stats[row.word] = {
+                    "weight": float(row.weight_sum or 0.0),
+                    "accepted_count": int(row.accepted_count or 0),
+                }
+
             feedback_count = int(
                 db.scalar(
                     select(func.count(LearningEvent.id)).where(LearningEvent.user_id == user_id)
@@ -145,9 +176,11 @@ class LearningService:
             )
 
             cached = {
+                "corrections": corrections,
                 "confusions": confusions,
                 "bigrams": bigrams,
                 "trigrams": trigrams,
+                "word_stats": word_stats,
                 "feedback_count": feedback_count,
             }
             with self._lock:
@@ -162,6 +195,88 @@ class LearningService:
         if user_id is None:
             return 0
         return int(self._load_cache(user_id)["feedback_count"])
+
+    def exact_correction_score(self, raw: str, candidate: str) -> float:
+        """
+        Devuelve 0..1 para una corrección exacta aprendida por este usuario.
+
+        Ejemplo:
+            HOL -> HOLA (1 vez)  ~= 0.65
+            HOL -> HOLA (2 veces) ~= 0.85
+            HOL -> HOLA (3+ veces) = 1.00
+
+        Si el usuario corrigió HOL hacia destinos distintos, también se tiene
+        en cuenta la proporción de peso de cada destino.
+        """
+        user_id = get_learning_user()
+        if user_id is None:
+            return 0.0
+
+        raw_key = self.normalize_key(raw)
+        candidate_key = self.normalize_key(candidate)
+        if not raw_key or not candidate_key:
+            return 0.0
+
+        row = self._load_cache(user_id)["corrections"].get(raw_key, {})
+        target = row.get(candidate_key)
+        if not target:
+            return 0.0
+
+        total_weight = sum(float(item["weight"]) for item in row.values())
+        if total_weight <= 0:
+            return 0.0
+
+        pair_probability = float(target["weight"]) / total_weight
+        pair_weight = float(target["weight"])
+
+        # El peso del feedback importa: un feedback explícito pesa 1.0 y uno
+        # implícito normalmente 0.20. Así, varias evidencias débiles no se
+        # convierten demasiado pronto en una regla rígida.
+        reliability = min(
+            1.0,
+            0.45 * min(1.0, pair_weight) + 0.20 * pair_weight,
+        )
+        return max(0.0, min(1.0, pair_probability * reliability))
+
+    def exact_correction_occurrences(self, raw: str, candidate: str) -> int:
+        """Número de correcciones explícitas raw -> candidate del usuario actual."""
+        user_id = get_learning_user()
+        if user_id is None:
+            return 0
+        raw_key = self.normalize_key(raw)
+        candidate_key = self.normalize_key(candidate)
+        target = (
+            self._load_cache(user_id)["corrections"]
+            .get(raw_key, {})
+            .get(candidate_key)
+        )
+        # Cuenta equivalente de feedback explícito (peso 1.0). Un feedback
+        # implícito de 0.20 necesita acumularse antes de habilitar autocorrección.
+        return int(float(target["weight"])) if target else 0
+
+    def personal_word_score(self, candidate: str) -> float:
+        """
+        0..1 según la frecuencia confirmada de la palabra para este usuario.
+
+        `user_word_stats` antes se escribía pero no participaba en el ranking.
+        Ahora aporta un refuerzo pequeño y personalizado.
+        """
+        user_id = get_learning_user()
+        if user_id is None:
+            return 0.0
+        candidate_key = self.normalize_key(candidate)
+        if not candidate_key:
+            return 0.0
+
+        stats = self._load_cache(user_id)["word_stats"]
+        target = stats.get(candidate_key)
+        if not target or not stats:
+            return 0.0
+
+        maximum = max(float(item["weight"]) for item in stats.values()) or 1.0
+        relative = float(target["weight"]) / maximum
+        reliability = min(1.0, float(target["weight"]))
+        return max(0.0, min(relative * reliability, 1.0))
 
     def confusion_probability(self, observed: str, expected: str) -> float:
         user_id = get_learning_user()
@@ -295,6 +410,29 @@ class LearningService:
                 )
             )
 
+            # Memoria exacta raw -> correct. A diferencia de
+            # user_confusions, también aprende inserciones y borrados completos
+            # como HOL -> HOLA o ESTS -> ESTAS.
+            if raw_key != correct_key:
+                exact_row = db.scalar(
+                    select(UserCorrection).where(
+                        UserCorrection.user_id == user_id,
+                        UserCorrection.raw_word == raw_key,
+                        UserCorrection.correct_word == correct_key,
+                    )
+                )
+                if exact_row is None:
+                    exact_row = UserCorrection(
+                        user_id=user_id,
+                        raw_word=raw_key,
+                        correct_word=correct_key,
+                        weight_sum=0.0,
+                        occurrences=0,
+                    )
+                    db.add(exact_row)
+                exact_row.weight_sum = float(exact_row.weight_sum or 0.0) + weight
+                exact_row.occurrences = int(exact_row.occurrences or 0) + 1
+
             learned_substitutions = []
             for observed, expected in self._alignment(raw_key, correct_key):
                 if not observed or not expected or observed == expected:
@@ -389,6 +527,11 @@ class LearningService:
                 "weight": weight,
                 "source": source,
                 "learned_substitutions": learned_substitutions,
+                "exact_pair": (
+                    f"{raw_key}->{correct_key}"
+                    if raw_key != correct_key
+                    else None
+                ),
             }
         except Exception:
             db.rollback()
@@ -450,7 +593,9 @@ class LearningService:
             return {
                 "user_id": None,
                 "feedback_count": 0,
+                "learned_exact_correction_pairs": 0,
                 "learned_substitution_pairs": 0,
+                "personal_words": 0,
                 "learned_bigram_pairs": 0,
                 "learned_trigram_pairs": 0,
             }
@@ -458,9 +603,13 @@ class LearningService:
         return {
             "user_id": user_id,
             "feedback_count": cache["feedback_count"],
+            "learned_exact_correction_pairs": sum(
+                len(targets) for targets in cache["corrections"].values()
+            ),
             "learned_substitution_pairs": sum(
                 len(targets) for targets in cache["confusions"].values()
             ),
+            "personal_words": len(cache["word_stats"]),
             "learned_bigram_pairs": sum(
                 len(targets) for targets in cache["bigrams"].values()
             ),

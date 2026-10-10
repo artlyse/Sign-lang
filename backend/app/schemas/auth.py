@@ -1,3 +1,5 @@
+"""Esquemas Pydantic de autenticación y tokens."""
+
 from pydantic import BaseModel, EmailStr, Field
 
 

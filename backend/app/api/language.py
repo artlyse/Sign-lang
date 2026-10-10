@@ -1,3 +1,5 @@
+"""Endpoints de diccionario, sugerencias y compatibilidad de estadísticas lingüísticas."""
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query

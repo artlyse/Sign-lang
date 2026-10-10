@@ -1,3 +1,5 @@
+"""Endpoints del perfil del usuario autenticado y preferencias de aprendizaje."""
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 

@@ -1,3 +1,5 @@
+"""Consulta de sesiones de traducción y predicciones persistidas del usuario."""
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session

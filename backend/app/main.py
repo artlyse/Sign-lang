@@ -1,9 +1,15 @@
+"""Punto de entrada FastAPI de SignLang.
+
+Registra routers REST/WebSocket, CORS y el ciclo de vida de la aplicación.
+Durante startup crea tablas faltantes y carga los servicios principales para
+detectar temprano errores de modelos o diccionarios."""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, language, learning, recognition, sessions, users
+from app.api import auth, language, learning, practice, recognition, sessions, users
 from app.config import APP_NAME, CORS_ORIGINS, ENVIRONMENT
 from app.database import database_health, init_db
 from app.websocket import recognition_ws_router
@@ -43,6 +49,7 @@ app.include_router(sessions.router)
 app.include_router(recognition.router)
 app.include_router(language.router)
 app.include_router(learning.router)
+app.include_router(practice.router)
 app.include_router(recognition_ws_router)
 
 

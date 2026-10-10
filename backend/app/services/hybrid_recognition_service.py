@@ -1,3 +1,5 @@
+"""Combina reconocimiento estático y LSTM dinámico con buffers y estabilidad temporal."""
+
 import time
 from collections import Counter, deque
 from typing import Deque, Optional, Tuple

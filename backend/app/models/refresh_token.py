@@ -1,3 +1,5 @@
+"""Modelo SQL de refresh tokens almacenados como hash y con revocación."""
+
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.sql import func
 from app.database import Base

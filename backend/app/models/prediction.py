@@ -1,3 +1,5 @@
+"""Modelo SQL de una predicción persistida dentro de una sesión."""
+
 # Modelo Prediction 
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text
 from sqlalchemy.sql import func
@@ -8,7 +10,7 @@ class Prediction(Base):
     __tablename__ = "predictions"
     
     id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)
+    session_id = Column(Integer, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=True, index=True)
     text = Column(String(255), nullable=False)
     translation = Column(String(255), nullable=True)
     confidence = Column(Float, nullable=False)

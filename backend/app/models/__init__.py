@@ -3,9 +3,10 @@ from app.models.user_profile import UserProfile
 from app.models.refresh_token import RefreshToken
 from app.models.session import Session
 from app.models.prediction import Prediction
-from app.models.word import Word
+from app.models.practice import PracticeAttempt, PracticeProgress
 from app.models.learning import (
     LearningEvent,
+    UserCorrection,
     UserConfusion,
     UserBigram,
     UserTrigram,
@@ -19,11 +20,13 @@ __all__ = [
     "RefreshToken",
     "Session",
     "Prediction",
-    "Word",
     "LearningEvent",
+    "UserCorrection",
     "UserConfusion",
     "UserBigram",
     "UserTrigram",
     "UserWordStat",
     "RankerTrainingExample",
+    "PracticeAttempt",
+    "PracticeProgress",
 ]

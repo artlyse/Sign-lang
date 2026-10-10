@@ -1,3 +1,5 @@
+"""Adaptador local de Hunspell es_PE usado por el corrector léxico."""
+
 import os
 import re
 import unicodedata

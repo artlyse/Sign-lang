@@ -1,3 +1,5 @@
+"""Carga Qwen localmente y corrige/genera oraciones solo cuando se solicita."""
+
 from __future__ import annotations
 
 import re
@@ -364,6 +366,89 @@ class SentenceCorrectorService:
             "model": SENTENCE_AI_MODEL_ID,
             "device": self._device,
         }
+
+
+    def generate_practice_phrase(self, difficulty: str = "beginner") -> str:
+        """
+        Genera una frase breve para práctica. Si el modelo ya está descargado,
+        usa Qwen localmente. El endpoint que llama a este método puede aplicar
+        un fallback si ocurre cualquier error.
+        """
+        difficulty = str(difficulty or "beginner").lower()
+        settings = {
+            "beginner": (
+                "3 a 5 palabras muy comunes, vocabulario cotidiano, "
+                "estructura simple"
+            ),
+            "intermediate": (
+                "5 a 8 palabras, vocabulario cotidiano y una estructura "
+                "natural de dificultad media"
+            ),
+            "advanced": (
+                "8 a 12 palabras, vocabulario variado pero claro y una "
+                "estructura natural"
+            ),
+        }
+        description = settings.get(difficulty, settings["beginner"])
+
+        self._load()
+
+        system_prompt = (
+            "Generas ejercicios breves en español para practicar lengua de "
+            "señas. Devuelve exactamente una sola frase, sin explicación, "
+            "sin numeración, sin comillas y sin emojis. Evita nombres propios, "
+            "siglas, cifras y palabras demasiado técnicas."
+        )
+        user_prompt = (
+            f"Genera una frase de nivel {difficulty}: {description}. "
+            "Debe tener sentido por sí sola y ser apropiada para práctica."
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        tokenizer = self._tokenizer
+        model = self._model
+        torch = self._torch
+
+        prompt = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
+        )
+        inputs = tokenizer([prompt], return_tensors="pt").to(self._device)
+
+        with torch.inference_mode():
+            generated_ids = model.generate(
+                **inputs,
+                max_new_tokens=48,
+                do_sample=True,
+                temperature=0.7,
+                top_p=0.9,
+                repetition_penalty=1.08,
+                pad_token_id=tokenizer.eos_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
+
+        output_ids = generated_ids[0][inputs["input_ids"].shape[-1]:]
+        phrase = tokenizer.decode(output_ids, skip_special_tokens=True)
+        phrase = self._clean_output(phrase)
+        phrase = phrase.splitlines()[0].strip(" \"'“”")
+
+        # Limitar salidas inesperadas.
+        words = phrase.split()
+        max_words = {
+            "beginner": 7,
+            "intermediate": 10,
+            "advanced": 14,
+        }.get(difficulty, 7)
+        if not phrase or len(words) > max_words:
+            raise RuntimeError("Qwen generó una frase fuera del formato esperado")
+
+        return phrase
 
 
 sentence_corrector_service = SentenceCorrectorService()

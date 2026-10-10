@@ -1,3 +1,9 @@
+"""Contexto de aprendizaje por usuario.
+
+Usa ContextVar para que el corrector conozca el user_id activo sin acoplar cada
+función lingüística a FastAPI. El WebSocket y los endpoints REST establecen y
+restauran este contexto alrededor de cada operación."""
+
 from contextvars import ContextVar, Token
 from typing import Optional
 

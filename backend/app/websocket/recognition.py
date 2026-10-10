@@ -1,3 +1,9 @@
+"""Canal WebSocket de reconocimiento en tiempo real.
+
+Orquesta letras híbridas, palabras completas, composición lingüística,
+corrección contextual y persistencia de predicciones/sesiones. Mantiene el
+camino de cámara separado de escrituras SQL mediante tareas en segundo plano."""
+
 import asyncio
 from datetime import datetime, timezone
 from typing import Optional, Set
@@ -15,6 +21,7 @@ from app.services.language_composer import LanguageComposerSession
 from app.services.learning_context import reset_learning_user, set_learning_user
 from app.services.recognition_service import recognition_service
 from app.services.sentence_corrector_service import sentence_corrector_service
+from app.services.word_recognition_service import WordRecognitionSession, word_recognition_service
 
 router = APIRouter()
 
@@ -163,6 +170,7 @@ async def websocket_recognition(websocket: WebSocket):
     )
 
     hybrid_session = HybridRecognitionSession()
+    word_session = WordRecognitionSession()
     language_session = LanguageComposerSession()
     prediction_count = 0
 
@@ -250,6 +258,54 @@ async def websocket_recognition(websocket: WebSocket):
                             str(event.get("mode", "static")),
                         )
 
+                elif mode == "word":
+                    features = data.get("features", [])
+                    timestamp_ms = data.get("timestamp_ms")
+
+                    result = await asyncio.to_thread(
+                        word_session.process,
+                        features,
+                        timestamp_ms,
+                    )
+                    if request_id is not None:
+                        result["request_id"] = request_id
+
+                    if not await _safe_send(websocket, result):
+                        break
+
+                    if result.get("accepted") and not result.get("error"):
+                        language_state = await asyncio.to_thread(
+                            language_session.process_word_prediction,
+                            result,
+                        )
+                        if not await _safe_send(
+                            websocket,
+                            {
+                                "kind": "language",
+                                "mode": "language",
+                                "status": "word_sign_added",
+                                "language": language_state,
+                            },
+                        ):
+                            break
+
+                        prediction_count += 1
+                        schedule_persistence(
+                            str(result.get("word", "")),
+                            float(result.get("confidence", 0.0)),
+                            "word",
+                        )
+
+                elif mode == "word_model_status":
+                    await _safe_send(
+                        websocket,
+                        {
+                            "kind": "word_model_status",
+                            "mode": "word",
+                            **word_recognition_service.status(),
+                        },
+                    )
+
                 elif mode == "static":
                     landmarks = data.get("landmarks", [])
                     result = await asyncio.to_thread(
@@ -306,7 +362,52 @@ async def websocket_recognition(websocket: WebSocket):
                             },
                         )
 
-                elif mode in {"hand_absent", "reset"}:
+                elif mode == "hand_absent":
+                    # En modo palabra, desaparecer las manos es el límite
+                    # natural del gesto. Antes de limpiar el buffer hacemos
+                    # una inferencia final con toda la ejecución.
+                    final_word_result = await asyncio.to_thread(
+                        word_session.finalize_gesture
+                    )
+
+                    if final_word_result is not None:
+                        if not await _safe_send(
+                            websocket,
+                            final_word_result,
+                        ):
+                            break
+
+                        if (
+                            final_word_result.get("accepted")
+                            and not final_word_result.get("error")
+                        ):
+                            language_state = await asyncio.to_thread(
+                                language_session.process_word_prediction,
+                                final_word_result,
+                            )
+                            if not await _safe_send(
+                                websocket,
+                                {
+                                    "kind": "language",
+                                    "mode": "language",
+                                    "status": "word_sign_added",
+                                    "language": language_state,
+                                },
+                            ):
+                                break
+
+                            prediction_count += 1
+                            schedule_persistence(
+                                str(final_word_result.get("word", "")),
+                                float(
+                                    final_word_result.get(
+                                        "confidence",
+                                        0.0,
+                                    )
+                                ),
+                                "word",
+                            )
+
                     hybrid_session.reset()
                     language_state = language_session.hand_absent()
                     await _safe_send(
@@ -315,6 +416,20 @@ async def websocket_recognition(websocket: WebSocket):
                             "kind": "language",
                             "mode": "language",
                             "status": "hand_absent",
+                            "language": language_state,
+                        },
+                    )
+
+                elif mode == "reset":
+                    hybrid_session.reset()
+                    word_session.reset()
+                    language_state = language_session.hand_absent()
+                    await _safe_send(
+                        websocket,
+                        {
+                            "kind": "language",
+                            "mode": "language",
+                            "status": "reset",
                             "language": language_state,
                         },
                     )
@@ -406,6 +521,7 @@ async def websocket_recognition(websocket: WebSocket):
                 elif mode == "clear_language":
                     language_state = language_session.clear()
                     hybrid_session.reset()
+                    word_session.reset()
                     await _safe_send(
                         websocket,
                         {

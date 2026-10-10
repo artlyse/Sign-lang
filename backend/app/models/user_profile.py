@@ -1,3 +1,5 @@
+"""Modelo SQL de preferencias y perfil asociado 1:1 al usuario."""
+
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.sql import func
 from app.database import Base

@@ -1,3 +1,9 @@
+"""Ranker ML incremental de candidatos.
+
+Combina features lingüísticas en un SGDClassifier y persiste el estado global
+en `language_ranker.joblib`. Los ejemplos usados para entrenar se auditan en
+SQLite. El modelo SGD es global; la memoria exacta/contextual sí es por usuario."""
+
 import os
 from typing import List, Optional
 
