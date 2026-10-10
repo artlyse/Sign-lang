@@ -1,351 +1,382 @@
 <div align="center">
 
-<img src="https://github.com/user-attachments/assets/a3346609-2afd-4bfd-9302-55afb67b9055" alt="SignLang - Interfaz v0.1" width="420"/>
+<img src="https://github.com/user-attachments/assets/a3346609-2afd-4bfd-9302-55afb67b9055" alt="SignLang - Interfaz" width="420"/>
 
 # SignLang
 
 ### Traductor Inteligente de Lengua de Señas mediante
-### Machine Learning y Visión por Computadora
+### Machine Learning, Visión por Computadora e Inteligencia Artificial
 
-Equipo:
 
-<img width="960" height="480" alt="autores_signlang_glitch_10mb" src="https://github.com/user-attachments/assets/dd25f904-c089-4220-95d4-adadba78929d" />
+### Equipo
 
----
-
-**Visión por Computadora · Machine Learning · NLP · IA Contextual**
+<img width="960" height="480" alt="Equipo SignLang" src="https://github.com/user-attachments/assets/dd25f904-c089-4220-95d4-adadba78929d" />
 
 ---
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+**Visión por Computadora · Machine Learning · NLP · IA Contextual · Accesibilidad**
+
+---
+
+[![Python](https://img.shields.io/badge/Python-3.14-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![React](https://img.shields.io/badge/React-19.2.8-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-8.3.0-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vite.dev/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![MediaPipe](https://img.shields.io/badge/MediaPipe-Hand%20Tracking-0097A7?style=for-the-badge&logo=google&logoColor=white)](https://mediapipe.dev/)
+[![MediaPipe](https://img.shields.io/badge/MediaPipe-Hands%20%2B%20Pose-0097A7?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/edge/mediapipe/)
 [![ONNX](https://img.shields.io/badge/ONNX-Runtime-005CED?style=for-the-badge&logo=onnx&logoColor=white)](https://onnxruntime.ai/)
-[![Qwen](https://img.shields.io/badge/Qwen-LLM%20Contextual-6E4AFF?style=for-the-badge)](https://github.com/QwenLM)
-[![WebSocket](https://img.shields.io/badge/WebSocket-Real--Time-010101?style=for-the-badge&logo=socketdotio&logoColor=white)](https://developer.mozilla.org/es/docs/Web/API/WebSockets_API)
+[![Qwen](https://img.shields.io/badge/Qwen3--0.6B-IA%20Contextual-6E4AFF?style=for-the-badge)](https://github.com/QwenLM)
+[![SQLite](https://img.shields.io/badge/SQLite-Persistencia-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-En%20Desarrollo-orange?style=for-the-badge)]()
 
 ---
 
-*Sistema web de reconocimiento y traducción de lengua de señas en tiempo real mediante visión por computadora, aprendizaje automático y procesamiento de lenguaje natural.*
+*Sistema web de reconocimiento, interpretación, práctica y traducción de lengua de señas en tiempo real mediante visión por computadora, aprendizaje automático, modelos temporales e inteligencia artificial contextual.*
 
 </div>
 
 ---
 
-## 📑 Contenido
+## Contenido
 
-<details open>
-<summary><strong>🧭 Visión General</strong></summary>
-
-- [Diseño del Sistema](#diseño-del-sistema)
-- [Diseño de EndPoints](#diseño-de-endpoints)
-- [Descripción General](#descripción-general)
-- [Descripción del Sistema](#descripción-del-sistema)
+- [Descripción general](#descripción-general)
+- [Objetivo del proyecto](#objetivo-del-proyecto)
+- [Estado actual](#estado-actual)
 - [Características principales](#características-principales)
-- [Arquitectura](#arquitectura)
-
-</details>
-
-<details open>
-<summary><strong>🛠️ Stack y Estructura</strong></summary>
-
-- [Tecnologías](#tecnologías)
-- [Estructura del proyecto](#estructura-del-proyecto)
-- [Estructura del modelo de aprendizaje](#estructura-del-modelo-de-aprendizaje)
+- [Arquitectura general](#arquitectura-general)
+- [Modos de reconocimiento](#modos-de-reconocimiento)
+  - [Modo Letras](#modo-letras)
+  - [Modo Palabras](#modo-palabras)
+- [Reconocimiento de palabras completas](#reconocimiento-de-palabras-completas)
+- [Entrenamiento del modelo de palabras](#entrenamiento-del-modelo-de-palabras)
+- [Módulo de práctica](#módulo-de-práctica)
+- [Corrección léxica y aprendizaje](#corrección-léxica-y-aprendizaje)
+- [Corrección contextual con Qwen](#corrección-contextual-con-qwen)
+- [Voz y accesibilidad](#voz-y-accesibilidad)
+- [Tecnologías y versiones](#tecnologías-y-versiones)
 - [Modelos utilizados](#modelos-utilizados)
-
-</details>
-
-<details open>
-<summary><strong>📥 Descargas</strong></summary>
-
-- [Descargas](#-descargas)
-
-</details>
-
-<details open>
-<summary><strong>⚙️ Instalación y Configuración</strong></summary>
-
-- [Requisitos](#requisitos)
-- [Instalación](#instalación)
-- [Configuración del Backend](#configuración-del-backend)
-- [Configuración del Frontend](#configuración-del-frontend)
-- [Modelo contextual Qwen](#modelo-contextual-qwen)
-- [Ejecución con CPU](#ejecución-con-cpu)
-- [Ejecución con GPU NVIDIA](#ejecución-con-gpu-nvidia)
-- [Variables de entorno](#variables-de-entorno)
-- [Git Ignore recomendado](#git-ignore-recomendado)
-
-</details>
-
-<details open>
-<summary><strong>🧠 Núcleo Funcional</strong></summary>
-
 - [Base de datos](#base-de-datos)
-- [Sistema de aprendizaje](#sistema-de-aprendizaje)
-- [Reconocimiento de señas](#reconocimiento-de-señas)
-- [Corrección de palabras](#corrección-de-palabras)
-- [Corrección contextual](#corrección-contextual)
-
-</details>
-
-<details open>
-<summary><strong>🚀 Uso y Operación</strong></summary>
-
-- [Uso de la aplicación](#uso-de-la-aplicación)
 - [API](#api)
 - [WebSocket](#websocket)
+- [Estructura del proyecto](#estructura-del-proyecto)
+- [Organización de ramas Git](#organización-de-ramas-git)
+- [Instalación](#instalación)
+- [Configuración](#configuración)
+- [Entrenamiento](#entrenamiento)
 - [Ejecución diaria](#ejecución-diaria)
-- [Instalación después de un nuevo Git Clone](#instalación-después-de-un-nuevo-git-clone)
-- [Archivos que no deben perderse](#archivos-que-no-deben-perderse)
-
-</details>
-
-<details open>
-<summary><strong>🧩 Referencia y Soporte</strong></summary>
-
+- [Archivos importantes](#archivos-importantes)
+- [Git Ignore recomendado](#git-ignore-recomendado)
 - [Problemas frecuentes](#problemas-frecuentes)
 - [Flujo técnico final](#flujo-técnico-final)
-- [Estado del proyecto](#estado-del-proyecto)
 - [Próximas mejoras](#próximas-mejoras)
-- [Autores](#autores)
+- [Equipo del proyecto](#equipo-del-proyecto)
 - [Historial de diseño](#historial-de-diseño)
 
-</details>
-
 ---
 
-## Diseño del Sistema
+# Descripción general
 
-<div align="center">
-<img width="1898" height="1079" alt="Diseño del sistema SignLang" src="https://github.com/user-attachments/assets/bd5a07b2-6d37-4c59-8c83-a35cde2ee86e" />
-</div>
+**SignLang** es una aplicación web orientada al reconocimiento y traducción de lengua de señas mediante cámara.
 
----
+El sistema combina:
 
-## Diseño de EndPoints
+- visión por computadora;
+- landmarks de manos y pose;
+- modelos de Machine Learning;
+- modelos temporales LSTM;
+- inferencia ONNX;
+- procesamiento lingüístico;
+- aprendizaje personalizado por usuario;
+- inteligencia artificial contextual;
+- síntesis y reconocimiento de voz;
+- práctica gamificada.
 
-<div align="center">
-<img width="1013" height="1079" alt="Diseño de EndPoints" src="https://github.com/user-attachments/assets/66228732-7837-4182-9f29-11acd3ee29f5" />
-</div>
-
----
-
-## Descripción General
-
-**SignLang** es una aplicación web capaz de **capturar, interpretar y traducir** lengua de señas en tiempo real. Utiliza la cámara del navegador para detectar las manos del usuario, extrae *landmarks* con **MediaPipe**, clasifica señas estáticas y dinámicas mediante modelos **ONNX** y construye palabras y oraciones aplicando un sistema de **corrección léxica y contextual** potenciado por un **LLM (Qwen)**.
-
-> 🎯 **Objetivo:** derribar barreras de comunicación entre personas sordas y oyentes mediante una interfaz accesible, precisa y en tiempo real.
-
----
-
-## Descripción del Sistema
-
-**SignLang** es una aplicación orientada a facilitar la comunicación mediante reconocimiento automático de lengua de señas.
-
-El sistema utiliza la cámara del usuario para detectar la posición y movimiento de la mano. Los landmarks obtenidos mediante MediaPipe son enviados al sistema de reconocimiento, donde diferentes modelos procesan señas estáticas y dinámicas.
-
-Posteriormente, las letras detectadas se convierten en palabras y las palabras son procesadas mediante herramientas lingüísticas para reducir errores producidos por el reconocimiento.
-
-Finalmente, un modelo contextual ligero puede mejorar la estructura completa de la oración.
-
-**Ejemplo:**
+La aplicación puede trabajar de dos maneras principales:
 
 ```text
-Reconocimiento inicial:
-
-HOLA COMO ESTDN HPY HACX FÑOI
+MODO LETRAS
+Cámara
+  ↓
+MediaPipe Hand Landmarker
+  ↓
+MLP estático + LSTM dinámico
+  ↓
+Letras
+  ↓
+Palabras
 ```
 
-```text
-Corrección léxica:
+y:
 
-HOLA COMO ESTAN HOY HACE FRIO
+```text
+MODO PALABRAS
+Cámara
+  ↓
+MediaPipe Hand Landmarker + Pose Landmarker
+  ↓
+Dos manos + brazos + torso
+  ↓
+Secuencia temporal
+  ↓
+LSTM de palabras
+  ↓
+Palabra o expresión completa
 ```
 
-```text
-Corrección contextual:
+Posteriormente ambos flujos comparten la misma capa lingüística:
 
-Hola, ¿cómo están? Hoy hace frío.
+```text
+Reconocimiento
+      ↓
+Corrector léxico
+      ↓
+Aprendizaje personalizado
+      ↓
+Oración
+      ↓
+Qwen3-0.6B
+      ↓
+Oración contextual
+      ↓
+Texto / Voz
 ```
 
 ---
 
-## Características principales
+# Objetivo del proyecto
 
-- Reconocimiento de señas mediante cámara.
-- Detección de manos con MediaPipe.
-- Reconocimiento de letras estáticas mediante modelo MLP.
-- Reconocimiento de letras dinámicas mediante modelo LSTM.
-- Modelos exportados a ONNX.
-- Reconocimiento híbrido estático/dinámico.
-- Corrección automática de palabras.
-- Diccionario español `es_PE`.
-- Generación de sugerencias mediante Hunspell.
-- Frecuencia léxica mediante `wordfreq`.
-- Comparación mediante distancia de Levenshtein.
-- Matriz de errores de reconocimiento.
-- Aprendizaje personalizado por usuario.
-- Corrección contextual mediante Qwen3-0.6B.
-- Compatibilidad con CPU.
-- Aceleración mediante GPU NVIDIA/CUDA.
-- Backend FastAPI.
-- Frontend React + TypeScript.
-- Comunicación en tiempo real mediante WebSocket.
-- Persistencia mediante SQLite y SQLAlchemy.
-- Sistema de autenticación de usuarios.
-- Access Token y Refresh Token.
-- Registro de sesiones y predicciones.
+El objetivo de SignLang es facilitar la comunicación entre personas que utilizan lengua de señas y personas que no la conocen, utilizando una interfaz accesible capaz de transformar señas detectadas por cámara en texto comprensible.
+
+El proyecto busca:
+
+- reconocer letras estáticas y dinámicas;
+- reconocer señas que representan palabras completas;
+- utilizar una o dos manos según la seña;
+- considerar movimiento de brazos y posición corporal;
+- construir palabras y oraciones;
+- corregir errores de reconocimiento;
+- aprender de las correcciones del usuario;
+- mejorar oraciones mediante un modelo contextual local;
+- reproducir el texto mediante voz;
+- convertir la voz de una persona oyente a texto;
+- permitir práctica y medición de precisión.
 
 ---
 
-## Arquitectura
+# Estado actual
+
+Actualmente SignLang dispone de:
+
+- reconocimiento de letras estáticas;
+- reconocimiento de letras dinámicas;
+- reconocimiento híbrido MLP/LSTM;
+- reconocimiento de palabras completas mediante LSTM;
+- captura simultánea de dos manos;
+- detección de pose superior para palabras;
+- normalización corporal;
+- entrenamiento desde cámara;
+- entrenamiento desde videos;
+- exportación de modelos a ONNX;
+- selector de cámara;
+- modo Letras / Palabras en el traductor;
+- corrección léxica;
+- sugerencias de palabras;
+- aprendizaje personalizado;
+- memoria de correcciones por usuario;
+- bigramas y trigramas;
+- ranker ML mediante SGDClassifier;
+- corrección contextual mediante Qwen3-0.6B;
+- autenticación de usuarios;
+- persistencia SQLite;
+- sesiones y predicciones;
+- módulo de práctica gamificado;
+- práctica de letras;
+- práctica de palabras;
+- práctica de frases generadas por Qwen;
+- medición de precisión, confianza y velocidad;
+- niveles, XP y rachas;
+- Text-to-Speech del navegador;
+- Speech-to-Text del navegador;
+- lectura automática configurable;
+- tema claro, oscuro o del sistema;
+- estadísticas derivadas de sesiones reales.
+
+---
+
+# Características principales
+
+## Reconocimiento
+
+- Cámara en tiempo real desde navegador.
+- Selector de cámara.
+- MediaPipe Hand Landmarker.
+- MediaPipe Pose Landmarker para el modo Palabra.
+- Detección de hasta dos manos.
+- Landmarks tridimensionales `X, Y, Z`.
+- Reconocimiento estático mediante MLP.
+- Reconocimiento dinámico mediante LSTM.
+- Reconocimiento de palabras completas mediante LSTM independiente.
+- Estabilización temporal.
+- Control de confianza.
+- Finalización de gestos.
+- Inferencia ONNX en Backend.
+
+## Procesamiento lingüístico
+
+- Hunspell / `spylls` con diccionario `es_PE`.
+- `wordfreq`.
+- RapidFuzz.
+- Damerau-Levenshtein ponderado.
+- Matriz de confusiones.
+- Bigramas.
+- Trigramas.
+- Ranking de candidatos.
+- `SGDClassifier`.
+- Memoria exacta de correcciones por usuario.
+- Corrección manual y aprendizaje.
+- Reemplazo de palabras ya insertadas.
+
+## Inteligencia artificial
+
+- Qwen3-0.6B.
+- Carga mediante Transformers.
+- PyTorch.
+- `safetensors`.
+- CPU o CUDA.
+- Corrección contextual de oraciones.
+- Generación de frases para práctica.
+- No utiliza Ollama.
+
+## Accesibilidad
+
+- Texto reconocido en tiempo real.
+- Text-to-Speech.
+- Speech-to-Text.
+- Configuración de voz.
+- Configuración de velocidad.
+- Configuración de tono.
+- Configuración de volumen.
+- Lectura automática.
+- Tema claro.
+- Tema oscuro.
+- Tema del sistema.
+
+---
+
+# Arquitectura general
 
 <div align="center">
 <img width="1024" height="1536" alt="Arquitectura de reconocimiento de señas y corrección textual" src="https://github.com/user-attachments/assets/6d037e88-a6cb-40ec-9c85-13ed9277ac65" />
 </div>
 
----
-
-## Tecnologías
-
-### Frontend
-
-- React
-- TypeScript
-- Vite
-- MediaPipe Tasks Vision
-- WebSocket
-- Web Speech API
-
-### Backend
-
-- Python
-- FastAPI
-- Uvicorn
-- SQLAlchemy
-- Pydantic
-- WebSockets
-- ONNX Runtime
-
-### Machine Learning
-
-- scikit-learn
-- NumPy
-- ONNX
-- MLP
-- LSTM
-- SGDClassifier
-
-### Procesamiento de lenguaje
-
-- Hunspell / spylls
-- wordfreq
-- RapidFuzz
-- Levenshtein
-- Bigramas
-- Trigramas
-- Matriz de confusión
-
-### Inteligencia Artificial contextual
-
-- Qwen3-0.6B
-- Transformers
-- PyTorch
-- Hugging Face Hub
-- safetensors
-
-### Persistencia
-
-- SQLite
-- SQLAlchemy
-
----
-
-## Estructura del proyecto
-
-<div align="center">
-<img width="1312" height="1199" alt="Estructura del proyecto en VS Code" src="https://github.com/user-attachments/assets/078fc453-957f-43c8-9f1f-7d124e1269fd" />
-</div>
-
----
-
-## Estructura del modelo de aprendizaje
-
-<div align="center">
-<img width="1536" height="1024" alt="Estructura del directorio ai-training" src="https://github.com/user-attachments/assets/8a136193-5578-43ab-9186-59d6006d174f" />
-</div>
-
----
-
-## Modelos utilizados
-
-### MediaPipe Hand Landmarker
-
-**Ubicación:**
+Arquitectura lógica actual:
 
 ```text
-frontend/public/hand_landmarker.task
+                       ┌─────────────────────┐
+                       │       CÁMARA        │
+                       └──────────┬──────────┘
+                                  │
+                 ┌────────────────┴────────────────┐
+                 │                                 │
+                 ▼                                 ▼
+        MODO LETRAS                       MODO PALABRAS
+                 │                                 │
+                 ▼                                 ▼
+      MediaPipe Hand                 MediaPipe Hands + Pose
+                 │                                 │
+                 ▼                                 ▼
+          21 landmarks                 2 manos + pose superior
+                 │                                 │
+         ┌───────┴────────┐                        │
+         ▼                ▼                        ▼
+     MLP estático    LSTM dinámico          LSTM de palabras
+         │             J/Ñ/Z                       │
+         └───────┬────────┘                        │
+                 │                                 │
+                 └──────────────┬──────────────────┘
+                                ▼
+                         RECONOCIMIENTO
+                                │
+                                ▼
+                        LANGUAGE COMPOSER
+                                │
+                ┌───────────────┼─────────────────┐
+                ▼               ▼                 ▼
+             Hunspell        wordfreq        Aprendizaje
+                │               │                 │
+                └───────────────┼─────────────────┘
+                                ▼
+                         PALABRAS / FRASE
+                                │
+                                ▼
+                           Qwen3-0.6B
+                                │
+                                ▼
+                         ORACIÓN FINAL
+                                │
+                   ┌────────────┴────────────┐
+                   ▼                         ▼
+                  TEXTO                     TTS
 ```
 
-**Función:**
+---
+
+# Modos de reconocimiento
+
+## Modo Letras
+
+El modo Letras mantiene el funcionamiento original del proyecto.
+
+### Letras estáticas
+
+Se procesan con:
 
 ```text
-Imagen de cámara
-        ↓
-MediaPipe
-        ↓
-21 puntos de la mano
-        ↓
+21 landmarks
+×
 X, Y, Z
+=
+63 características
 ```
 
-MediaPipe **no** clasifica las letras del proyecto. Su función es obtener los landmarks utilizados por los modelos entrenados.
-
----
-
-### Modelo estático
-
-**Archivos:**
+Flujo:
 
 ```text
-backend/app/ai/models/gesture_model.onnx
-backend/app/ai/models/gesture_model.onnx.data
-backend/app/ai/models/scaler_static.pkl
-```
-
-Modelo utilizado para reconocer señas cuya información principal se encuentra en una postura estática.
-
-**Flujo:**
-
-```text
+Cámara
+  ↓
+MediaPipe
+  ↓
 63 valores
-21 landmarks × X,Y,Z
-        ↓
-scaler_static.pkl
-        ↓
+  ↓
+StandardScaler
+  ↓
 gesture_model.onnx
-        ↓
-letra
+  ↓
+Letra
 ```
 
----
+Para evitar letras accidentales se utilizan:
 
-### Modelo dinámico
+- confianza mínima;
+- estabilidad en varios frames;
+- tiempo mínimo de permanencia;
+- cooldown;
+- bloqueo para letras repetidas hasta retirar la mano.
 
-**Archivos:**
+Configuración principal actual:
 
 ```text
-backend/app/ai/models/lstm_model.onnx
-backend/app/ai/models/lstm_model.onnx.data
-backend/app/ai/models/scaler_dynamic.pkl
+LANGUAGE_STATIC_MIN_CONFIDENCE = 0.82
+LANGUAGE_STATIC_HOLD_MS = 380
+LANGUAGE_STATIC_STABLE_FRAMES = 5
 ```
 
-Modelo utilizado para reconocer señas que requieren movimiento.
+### Letras dinámicas
 
-Actualmente se utiliza especialmente para:
+Las letras que necesitan movimiento utilizan un modelo temporal.
+
+Actualmente se emplea principalmente para:
 
 ```text
 J
@@ -353,92 +384,1323 @@ J
 Z
 ```
 
-**Flujo:**
+Flujo:
 
 ```text
-Secuencia temporal
-        ↓
-scaler_dynamic.pkl
-        ↓
+Frames consecutivos
+      ↓
+StandardScaler
+      ↓
 lstm_model.onnx
-        ↓
-J / Ñ / Z
+      ↓
+Letra dinámica
+```
+
+Configuración principal:
+
+```text
+HYBRID_DYNAMIC_SAMPLE_FPS = 15
+HYBRID_DYNAMIC_CONFIDENCE = 0.80
+HYBRID_DYNAMIC_CONFIRMATIONS = 2
+LANGUAGE_DYNAMIC_HOLD_MS = 260
 ```
 
 ---
 
-## 📥 Descargas
+## Modo Palabras
 
-Los modelos preentrenados necesarios para el funcionamiento de **SignLang** están disponibles públicamente. Descárgalos y colócalos en `backend/app/ai/models/` antes de ejecutar la aplicación.
+El modo Palabras reconoce una seña completa como una unidad.
 
-<div align="center">
+Ejemplo:
 
-| Recurso | Descripción | Ubicación destino | Enlace |
-|:-------:|:------------|:-----------------:|:------:|
-| 🧠 **Modelos preentrenados** | Pesos ONNX (estático + dinámico) y scalers | `backend/app/ai/models/` | [⬇️ Descargar](https://www.mediafire.com/folder/cr8w810hmx6fe/Models) |
+```text
+Seña completa
+     ↓
+HIJO
+```
 
-</div>
+en lugar de:
 
-> ⚠️ **Importante:** después de descargar, verifica que los archivos `.onnx` y `.pkl` estén ubicados en `backend/app/ai/models/` con los nombres exactos que espera el backend (ver [Modelos utilizados](#modelos-utilizados)).
+```text
+H + I + J + O
+```
+
+Este modo utiliza:
+
+- mano izquierda;
+- mano derecha;
+- posición relativa de ambas manos;
+- cabeza como referencia parcial;
+- hombros;
+- codos;
+- muñecas;
+- torso superior;
+- movimiento temporal.
+
+El frontend permite cambiar entre:
+
+```text
+[ LETRAS ]   [ PALABRAS ]
+```
+
+sin cambiar de aplicación ni de cámara.
 
 ---
 
-## Requisitos
+# Reconocimiento de palabras completas
 
-### Hardware mínimo
+## Representación de un frame
 
-| Componente | Requisito |
-|---|---|
-| CPU | 4 núcleos |
-| RAM | 8 GB |
-| Cámara | Webcam 720p |
-| Almacenamiento | 5 GB libres |
-| Internet | Requerido para instalación inicial |
+El vector utilizado por el modelo contiene:
 
-### Hardware recomendado
+### Mano izquierda
 
-| Componente | Recomendación |
-|---|---|
-| CPU | 6–8 núcleos |
-| RAM | 16 GB |
-| Cámara | 1080p |
-| Almacenamiento | SSD |
-| GPU | NVIDIA RTX |
-| VRAM | 6 GB o superior |
+```text
+21 landmarks × X,Y,Z = 63
+posición global de muñeca = 3
+Total = 66
+```
 
-El uso de GPU es opcional para el reconocimiento principal. La GPU se utiliza principalmente para acelerar:
+### Mano derecha
+
+```text
+21 landmarks × X,Y,Z = 63
+posición global de muñeca = 3
+Total = 66
+```
+
+### Pose superior
+
+Se utilizan 15 landmarks seleccionados:
+
+```text
+0
+11–24
+```
+
+Cada punto aporta:
+
+```text
+X
+Y
+Z
+visibility
+```
+
+Total:
+
+```text
+15 × 4 = 60
+```
+
+### Vector final
+
+```text
+66
++
+66
++
+60
+=
+192 características por frame
+```
+
+Constantes:
+
+```text
+WORD_FEATURE_DIM = 192
+WORD_SEQUENCE_FRAMES = 30
+```
+
+## Secuencia temporal
+
+Cada palabra se representa mediante:
+
+```text
+30 frames
+×
+192 características
+```
+
+Durante captura y reconocimiento se utiliza aproximadamente:
+
+```text
+15 FPS
+```
+
+por lo que una secuencia completa representa aproximadamente:
+
+```text
+2 segundos
+```
+
+## Normalización corporal
+
+Para reducir dependencia de la distancia y posición de la persona:
+
+- las manos se normalizan respecto a su muñeca;
+- se calcula una escala local de mano;
+- la posición global de las muñecas se expresa respecto al cuerpo;
+- los hombros se utilizan como referencia de escala corporal;
+- la pose se normaliza respecto al centro de los hombros.
+
+Esto permite que el modelo aprenda mejor la geometría del gesto y no solamente coordenadas absolutas de pantalla.
+
+## Finalización del gesto
+
+El sistema no depende únicamente de obtener varias predicciones mientras las manos permanecen visibles.
+
+Cuando termina la seña:
+
+```text
+manos visibles
+     ↓
+secuencia
+     ↓
+manos desaparecen durante una pausa corta
+     ↓
+fin de gesto
+     ↓
+remuestreo a 30 frames
+     ↓
+inferencia final
+```
+
+Esto evita perder una palabra cuando el usuario finaliza el gesto inmediatamente después de completar la secuencia.
+
+## Modelo
+
+El modelo de palabras utiliza:
+
+```text
+LSTM
+├── input_size = 192
+├── hidden_size = 128
+├── num_layers = 2
+├── dropout = 0.20
+└── LayerNorm + Linear
+```
+
+Entrenamiento:
+
+```text
+PyTorch
+```
+
+Inferencia:
+
+```text
+ONNX Runtime
+```
+
+Salida:
+
+```text
+word_model.onnx
+scaler_word.pkl
+word_labels.json
+```
+
+## Etiquetas actuales
+
+El modelo actual contiene:
+
+```text
+BIEN
+COMO_ESTAS
+CON_PERMISO
+DE_NADA
+GRACIAS
+HIJO
+HOLA
+MAL
+NO
+PERDON
+SI
+```
+
+Las etiquetas con `_` se convierten a espacios al mostrarse:
+
+```text
+COMO_ESTAS
+↓
+COMO ESTAS
+```
+
+```text
+CON_PERMISO
+↓
+CON PERMISO
+```
+
+```text
+DE_NADA
+↓
+DE NADA
+```
+
+---
+
+# Entrenamiento del modelo de palabras
+
+La herramienta se encuentra en:
+
+```text
+ai-training/word_mode/
+```
+
+Estructura principal:
+
+```text
+word_mode/
+├── collect_camera.py
+├── import_video.py
+├── feature_extractor.py
+├── dataset_utils.py
+├── train_word_model.py
+├── export_word_model.py
+├── download_models.py
+├── menu.py
+├── requirements.txt
+├── instalar_requisitos.bat
+├── iniciar_entrenamiento.bat
+├── models/
+└── dataset/
+```
+
+## Fuentes de datos
+
+El dataset puede obtenerse de dos maneras.
+
+### Cámara
+
+```text
+Usuario
+  ↓
+realiza seña completa
+  ↓
+30 frames
+  ↓
+archivo .npz
+```
+
+### Video
+
+```text
+.mp4 / .avi / .mov / ...
+        ↓
+MediaPipe
+        ↓
+secuencia normalizada
+        ↓
+archivo .npz
+```
+
+Los dos métodos generan el mismo formato de entrenamiento.
+
+## Menú
+
+```text
+1. Capturar muestras con CAMARA
+2. Importar muestra desde VIDEO
+3. Entrenar y exportar modelo ONNX
+4. Exportar ultimo word_model.pt a ONNX
+5. Salir
+```
+
+## Cámara
+
+El capturador:
+
+- detecta cámaras disponibles;
+- prueba DirectShow en Windows;
+- verifica que la cámara realmente entregue frames;
+- permite seleccionar índice;
+- muestra preview;
+- detecta manos y pose;
+- registra una secuencia dinámica completa.
+
+## Entrenamiento
+
+## Estructura visual del módulo de aprendizaje
+
+<div align="center">
+<img width="1536" height="1024" alt="Estructura del directorio ai-training" src="https://github.com/user-attachments/assets/8a136193-5578-43ab-9186-59d6006d174f" />
+</div>
+
+La estructura anterior corresponde a la organización visual del módulo de entrenamiento. La versión actual amplía este módulo con `word_mode/` para el entrenamiento de señas que representan palabras completas.
+
+
+```text
+dataset
+  ↓
+train/test split estratificado
+  ↓
+StandardScaler
+  ↓
+LSTM PyTorch
+  ↓
+validación
+  ↓
+word_model.pt
+  ↓
+exportación ONNX
+  ↓
+word_model.onnx
+```
+
+El entrenamiento utiliza CUDA automáticamente cuando:
+
+```python
+torch.cuda.is_available()
+```
+
+es `True`.
+
+La inferencia ONNX del modelo de palabras se ejecuta actualmente con:
+
+```text
+CPUExecutionProvider
+```
+
+porque el modelo es suficientemente ligero para reconocimiento en tiempo real.
+
+---
+
+# Módulo de práctica
+
+SignLang incluye un módulo gamificado de práctica.
+
+## Tipos de reto
+
+```text
+Letra
+Palabra
+Frase IA
+```
+
+## Modos de reconocimiento
+
+```text
+Por letras
+Por palabras
+```
+
+Una palabra puede practicarse:
+
+```text
+HOLA
+```
+
+por deletreo:
+
+```text
+H + O + L + A
+```
+
+o mediante su seña completa:
+
+```text
+seña HOLA
+```
+
+## Dificultad
+
+```text
+Inicial
+Intermedio
+Avanzado
+```
+
+## Métricas
+
+Cada intento puede almacenar:
+
+- texto objetivo;
+- texto reconocido;
+- precisión;
+- confianza;
+- tiempo;
+- XP obtenido;
+- éxito;
+- fecha.
+
+## Gamificación
+
+Se utilizan:
+
+- XP total;
+- nivel;
+- racha actual;
+- mejor racha;
+- precisión;
+- velocidad;
+- insignias.
+
+## Qwen en práctica
+
+En modo frase:
+
+```text
+Qwen3-0.6B
+   ↓
+genera una frase breve
+   ↓
+usuario realiza la frase
+   ↓
+se compara el resultado
+```
+
+Si Qwen no está disponible se utilizan frases locales de respaldo.
+
+Endpoints:
+
+```text
+GET  /api/practice/challenge
+GET  /api/practice/progress
+POST /api/practice/attempt
+```
+
+---
+
+# Corrección léxica y aprendizaje
+
+Después del reconocimiento, SignLang no muestra siempre la salida cruda directamente.
+
+Ejemplo:
+
+```text
+HOL
+```
+
+puede convertirse en:
+
+```text
+HOLA
+```
+
+El sistema combina:
+
+```text
+Hunspell
++
+wordfreq
++
+RapidFuzz
++
+Damerau-Levenshtein
++
+matriz de confusión
++
+bigramas
++
+trigramas
++
+frecuencia personal
++
+memoria de correcciones
++
+SGDClassifier
+```
+
+## Estado crudo e interpretado
+
+Se mantienen separados:
+
+```text
+raw_word
+```
+
+y:
+
+```text
+resolved_word
+```
+
+Ejemplo:
+
+```text
+raw_word      = HOL
+resolved_word = HOLA
+```
+
+Esto permite mostrar una palabra limpia sin perder información necesaria para aprendizaje.
+
+---
+
+## Aprendizaje personalizado
+
+Cuando el usuario corrige:
+
+```text
+HOL
+↓
+HOLA
+```
+
+el sistema registra feedback.
+
+El aprendizaje puede influir mediante:
+
+- memoria exacta de corrección;
+- confusiones de caracteres;
+- frecuencia personal;
+- bigramas;
+- trigramas;
+- ejemplos para el ranker ML.
+
+### Memoria exacta
+
+Se utiliza para errores como:
+
+```text
+HOL → HOLA
+```
+
+que no necesariamente pueden representarse como una simple sustitución de letra.
+
+Parámetros actuales:
+
+```text
+LANGUAGE_EXACT_CORRECTION_BOOST = 0.12
+LANGUAGE_EXACT_CORRECTION_AUTO_COUNT = 2
+LANGUAGE_PERSONAL_WORD_BOOST = 0.025
+```
+
+Comportamiento esperado:
+
+```text
+Primera corrección
+HOL → HOLA
+↓
+HOLA obtiene un boost importante
+```
+
+```text
+Segunda corrección igual
+HOL → HOLA
+↓
+la memoria gana suficiente evidencia
+```
+
+y posteriormente puede autocorregirse con mayor seguridad.
+
+### Confusiones
+
+También puede aprender relaciones como:
+
+```text
+B → O
+X → L
+```
+
+para reducir el coste de errores visuales repetitivos.
+
+### Ranker ML
+
+El `SGDClassifier` aprende a ordenar candidatos utilizando características como:
+
+- similitud;
+- frecuencia;
+- contexto;
+- confusiones;
+- prefijo;
+- sufijo;
+- longitud;
+- pertenencia al diccionario;
+- completado;
+- score base.
+
+---
+
+# Corrección contextual con Qwen
+
+SignLang utiliza:
 
 ```text
 Qwen3-0.6B
 ```
 
----
+como capa final de lenguaje.
 
-## Instalación
+No se ejecuta por frame.
 
-### 1. Clonar repositorio
+No se utiliza para reconocer manos.
 
-```bash
-git clone URL_DEL_REPOSITORIO
+No reemplaza MLP ni LSTM.
+
+Su función es trabajar cuando ya existe una oración.
+
+Ejemplo:
+
+```text
+HOLA COMO ESTAN HOY HACX FÑOI
 ```
 
-Ingresar:
+puede convertirse en:
 
-```bash
+```text
+Hola, ¿cómo están? Hoy hace frío.
+```
+
+Pipeline:
+
+```text
+Reconocimiento
+      ↓
+Corrector de palabras
+      ↓
+Oración preliminar
+      ↓
+Qwen3-0.6B
+      ↓
+Oración contextual
+```
+
+También se utiliza para generar frases del módulo de práctica.
+
+El modelo se carga directamente mediante:
+
+```text
+Transformers
+PyTorch
+safetensors
+```
+
+No se utiliza:
+
+```text
+Ollama
+LM Studio
+servidor LLM externo
+```
+
+---
+
+# Voz y accesibilidad
+
+## Text-to-Speech
+
+El frontend utiliza:
+
+```text
+Web Speech API
+speechSynthesis
+```
+
+El usuario puede configurar:
+
+- voz;
+- velocidad;
+- tono;
+- volumen.
+
+## Lectura automática
+
+Se puede activar o desactivar.
+
+Cuando está activa existen dos modos.
+
+### Solo palabras nuevas
+
+```text
+HOLA
+→ lee "HOLA"
+
+COMO
+→ lee "COMO"
+
+ESTAS
+→ lee "ESTAS"
+```
+
+### Lectura corrida
+
+Cada palabra vuelve a leer el mensaje completo.
+
+```text
+HOLA
+→ "HOLA"
+
+HOLA COMO
+→ "HOLA COMO"
+
+HOLA COMO ESTAS
+→ "HOLA COMO ESTAS"
+```
+
+## Speech-to-Text
+
+La respuesta hablada de una persona puede convertirse a texto mediante la API de reconocimiento de voz disponible en navegadores compatibles.
+
+Esto permite una comunicación en ambos sentidos:
+
+```text
+Lengua de señas
+→ texto / voz
+```
+
+y:
+
+```text
+Voz
+→ texto
+```
+
+---
+
+# Tecnologías y versiones
+
+## Frontend
+
+Versiones definidas actualmente en `frontend/package.json`:
+
+| Tecnología | Versión | Función |
+|---|---:|---|
+| React | `^19.2.8` | Interfaz |
+| React DOM | `^19.2.8` | Renderizado |
+| TypeScript | `~6.0.2` | Tipado |
+| Vite | `^8.3.0` | Build y desarrollo |
+| `@vitejs/plugin-react` | `^6.1.1` | Integración React/Vite |
+| `@mediapipe/tasks-vision` | `^1.0.1` | Hands/Pose en navegador |
+| oxlint | `^1.81.0` | Lint |
+
+## Backend
+
+El entorno actual del proyecto utiliza Python 3.14.
+
+Dependencias principales declaradas:
+
+| Tecnología | Restricción en proyecto | Función |
+|---|---:|---|
+| Python | `3.14` entorno utilizado | Backend y entrenamiento |
+| FastAPI | sin pin | API |
+| Uvicorn | sin pin | Servidor ASGI |
+| SQLAlchemy | sin pin | ORM |
+| Pydantic | sin pin | Esquemas |
+| ONNX Runtime | sin pin | Inferencia |
+| NumPy | sin pin | Cálculo |
+| scikit-learn | sin pin | Scalers y ranker |
+| RapidFuzz | sin pin | Similitud |
+| wordfreq | sin pin | Frecuencia léxica |
+| spylls | sin pin | Hunspell |
+| PyTorch | `>=2.10.0` | LSTM/Qwen |
+| Transformers | `>=4.51.0` | Qwen |
+| Accelerate | `>=1.0.0` | Ejecución IA |
+| safetensors | `>=0.5.0` | Pesos Qwen |
+| huggingface-hub | `>=0.34.0` | Descarga/modelos |
+
+> Las librerías marcadas como **sin pin** se instalan desde `backend/requirements.txt`, pero actualmente no tienen una versión exacta fijada.
+
+## Entrenamiento de palabras
+
+`ai-training/word_mode/requirements.txt`:
+
+| Tecnología | Versión mínima |
+|---|---:|
+| MediaPipe Python | `>=1.1.0` |
+| OpenCV contrib | `>=5.0.0.93` |
+| ONNX | `>=1.19.0` |
+
+`torch` no se vuelve a declarar en este archivo para evitar reemplazar accidentalmente una instalación CUDA del backend.
+
+---
+
+# Modelos utilizados
+
+## MediaPipe Hand Landmarker
+
+Frontend:
+
+```text
+frontend/public/hand_landmarker.task
+```
+
+Función:
+
+```text
+imagen
+  ↓
+21 puntos por mano
+  ↓
+X, Y, Z
+```
+
+MediaPipe no decide qué letra o palabra se realizó.
+
+Solo extrae características visuales.
+
+---
+
+## MediaPipe Pose Landmarker
+
+En modo Palabra se utiliza Pose Landmarker para obtener referencias corporales.
+
+Por defecto el frontend puede utilizar:
+
+```text
+pose_landmarker_lite.task
+```
+
+La URL puede configurarse mediante:
+
+```env
+VITE_POSE_MODEL_URL=
+```
+
+El frontend utiliza WASM de MediaPipe Tasks Vision.
+
+---
+
+## Modelo estático
+
+Archivos:
+
+```text
+backend/app/ai/models/
+├── gesture_model.onnx
+├── gesture_model.onnx.data
+└── scaler_static.pkl
+```
+
+Entrada:
+
+```text
+[1, 63]
+```
+
+Salida:
+
+```text
+letra estática
+```
+
+---
+
+## Modelo dinámico de letras
+
+Archivos:
+
+```text
+backend/app/ai/models/
+├── lstm_model.onnx
+├── lstm_model.onnx.data
+└── scaler_dynamic.pkl
+```
+
+Entrada:
+
+```text
+secuencia temporal
+```
+
+Uso principal:
+
+```text
+J / Ñ / Z
+```
+
+---
+
+## Modelo de palabras
+
+Archivos:
+
+```text
+backend/app/ai/models/
+├── word_model.onnx
+├── scaler_word.pkl
+└── word_labels.json
+```
+
+Entrada:
+
+```text
+[1, 30, 192]
+```
+
+Salida:
+
+```text
+palabra / expresión
+```
+
+---
+
+## Qwen
+
+Modelo:
+
+```text
+Qwen/Qwen3-0.6B
+```
+
+Ubicación local:
+
+```text
+backend/data/models/qwen3-0.6b/
+```
+
+---
+
+# Base de datos
+
+SignLang utiliza:
+
+```text
+SQLite
++
+SQLAlchemy
+```
+
+Archivo local:
+
+```text
+backend/data/app.db
+```
+
+Al iniciar FastAPI:
+
+```python
+Base.metadata.create_all(bind=engine)
+```
+
+crea tablas faltantes.
+
+> `create_all()` no sustituye un sistema formal de migraciones. Para cambios estructurales futuros se recomienda Alembic.
+
+## Tablas principales
+
+```text
+users
+user_profiles
+refresh_tokens
+
+sessions
+predictions
+
+learning_events
+user_corrections
+user_confusions
+user_bigrams
+user_trigrams
+user_word_stats
+ranker_training_examples
+
+practice_progress
+practice_attempts
+```
+
+## Relaciones conceptuales
+
+```text
+users
+ │
+ ├── user_profiles
+ ├── refresh_tokens
+ ├── sessions
+ │    └── predictions
+ │
+ ├── learning_events
+ ├── user_corrections
+ ├── user_confusions
+ ├── user_bigrams
+ ├── user_trigrams
+ ├── user_word_stats
+ ├── ranker_training_examples
+ │
+ ├── practice_progress
+ └── practice_attempts
+```
+
+## Comprobación
+
+```powershell
+cd backend
+venv\Scripts\activate
+python scripts\check_database.py
+```
+
+Para revisar aprendizaje:
+
+```powershell
+python scripts\check_learning.py HOL --user-id 1
+```
+
+---
+
+# API
+
+Swagger:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+## Autenticación
+
+```text
+POST /api/auth/register
+POST /api/auth/login
+POST /api/auth/refresh
+POST /api/auth/logout
+GET  /api/auth/me
+```
+
+## Usuarios
+
+```text
+GET   /api/users/me/profile
+PATCH /api/users/me/profile
+```
+
+## Reconocimiento
+
+```text
+POST /api/recognition/predict-static
+POST /api/recognition/predict-dynamic
+GET  /api/recognition/models
+```
+
+## Lenguaje
+
+```text
+GET /api/language/suggest
+GET /api/language/lookup
+GET /api/language/dictionary-suggest
+GET /api/language/learning/stats
+GET /api/language/learning/recent
+GET /api/language/health
+```
+
+## Aprendizaje
+
+```text
+GET /api/learning/stats
+GET /api/learning/recent
+```
+
+## Sesiones
+
+```text
+GET /api/sessions
+GET /api/sessions/{session_id}/predictions
+```
+
+## Práctica
+
+```text
+GET  /api/practice/challenge
+GET  /api/practice/progress
+POST /api/practice/attempt
+```
+
+---
+
+# WebSocket
+
+Endpoint:
+
+```text
+/ws/recognition
+```
+
+Con autenticación opcional:
+
+```text
+/ws/recognition?token=ACCESS_TOKEN
+```
+
+Modos soportados actualmente:
+
+```text
+hybrid
+word
+word_model_status
+
+static
+dynamic
+
+hand_absent
+reset
+
+finalize_word
+choose_suggestion
+replace_sentence_word
+correct_last_word
+dismiss_learning
+
+backspace_language
+clear_language
+get_language_state
+
+correct_sentence
+ping
+```
+
+## Modo Letras
+
+Ejemplo:
+
+```json
+{
+  "mode": "hybrid",
+  "landmarks": []
+}
+```
+
+## Modo Palabras
+
+Ejemplo conceptual:
+
+```json
+{
+  "mode": "word",
+  "features": [192 valores],
+  "timestamp_ms": 123456789
+}
+```
+
+## Corrección contextual
+
+```json
+{
+  "mode": "correct_sentence",
+  "sentence": "hola como estdn hpy hacx fñoi"
+}
+```
+
+---
+
+# Estructura del proyecto
+
+<div align="center">
+<img width="1312" height="1199" alt="Estructura del proyecto en VS Code" src="https://github.com/user-attachments/assets/078fc453-957f-43c8-9f1f-7d124e1269fd" />
+</div>
+
+
+```text
+Sign-lang/
+│
+├── ai-training/
+│   ├── export/
+│   ├── training/
+│   ├── capture_dataset.py
+│   ├── capture_dynamic.py
+│   ├── verificar_dataset.py
+│   │
+│   └── word_mode/
+│       ├── collect_camera.py
+│       ├── import_video.py
+│       ├── feature_extractor.py
+│       ├── dataset_utils.py
+│       ├── train_word_model.py
+│       ├── export_word_model.py
+│       ├── menu.py
+│       ├── models/
+│       └── dataset/
+│
+├── backend/
+│   ├── app/
+│   │   ├── ai/
+│   │   ├── api/
+│   │   ├── core/
+│   │   ├── models/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   └── websocket/
+│   │
+│   ├── data/
+│   ├── scripts/
+│   └── requirements.txt
+│
+├── frontend/
+│   ├── public/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── pages/
+│   │   └── services/
+│   │
+│   ├── package.json
+│   └── vite.config.ts
+│
+├── docs/
+│   └── technical/
+│
+└── README.md
+```
+
+---
+
+# Organización de ramas Git
+
+El repositorio utiliza actualmente:
+
+```text
+main
+ai-training
+backend
+frontend
+```
+
+## `main`
+
+Contiene la integración completa:
+
+```text
+ai-training/
+backend/
+frontend/
+docs/
+```
+
+## `ai-training`
+
+Se utiliza para mantener únicamente:
+
+```text
+ai-training/
+```
+
+## `backend`
+
+Se utiliza para mantener el módulo:
+
+```text
+backend/
+```
+
+## `frontend`
+
+Se utiliza para mantener:
+
+```text
+frontend/
+```
+
+La rama `main` funciona como rama de integración del sistema completo.
+
+---
+
+# Instalación
+
+## 1. Clonar repositorio
+
+```powershell
+git clone URL_DEL_REPOSITORIO
 cd Sign-lang
 ```
 
 ---
 
-## Configuración del Backend
-
-Entrar al Backend:
+## 2. Backend
 
 ```powershell
 cd backend
 ```
 
-Crear entorno virtual:
+Crear entorno:
 
 ```powershell
 python -m venv venv
@@ -450,59 +1712,41 @@ Activar:
 venv\Scripts\activate
 ```
 
-Debe aparecer:
-
-```text
-(venv) ...\Sign-lang\backend>
-```
-
 Actualizar pip:
 
 ```powershell
 python -m pip install --upgrade pip
 ```
 
-Instalar dependencias:
+Instalar:
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-### Iniciar Backend
+---
+
+## 3. Qwen
+
+Desde `backend/`:
 
 ```powershell
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+python -m scripts.download_qwen_model
 ```
 
-- Backend: `http://127.0.0.1:8000`
-- Swagger: `http://127.0.0.1:8000/docs`
-- Health: `http://127.0.0.1:8000/health`
+Se almacena en:
+
+```text
+backend/data/models/qwen3-0.6b/
+```
 
 ---
 
-## Configuración del Frontend
-
-Abrir otra terminal:
+## 4. Frontend
 
 ```powershell
 cd frontend
-```
-
-Instalar dependencias:
-
-```powershell
-npm install
-```
-
-Si existe `package-lock.json` se recomienda:
-
-```powershell
 npm ci
-```
-
-Ejecutar:
-
-```powershell
 npm run dev
 ```
 
@@ -514,179 +1758,9 @@ http://localhost:5173
 
 ---
 
-## Modelo contextual Qwen
+# Configuración
 
-SignLang incorpora:
-
-```text
-Qwen3-0.6B
-```
-
-como capa de corrección contextual.
-
-**No** se utiliza:
-
-```text
-Ollama
-LM Studio
-Servidor LLM externo
-```
-
-Qwen se ejecuta directamente dentro del Backend mediante:
-
-```text
-Transformers
-PyTorch
-safetensors
-```
-
-### Descargar Qwen
-
-Desde `backend/`, activar:
-
-```powershell
-venv\Scripts\activate
-```
-
-Ejecutar:
-
-```powershell
-python -m scripts.download_qwen_model
-```
-
-El modelo se almacena en:
-
-```text
-backend/data/models/qwen3-0.6b/
-```
-
-Estructura:
-
-```text
-qwen3-0.6b/
-│
-├── config.json
-├── generation_config.json
-├── tokenizer_config.json
-├── tokenizer.json
-└── model.safetensors
-```
-
-El archivo `model.safetensors` contiene los pesos principales de Qwen.
-
----
-
-## Ejecución con CPU
-
-Para utilizar Qwen mediante CPU:
-
-```env
-SENTENCE_AI_USE_GPU=false
-```
-
-Comprobar:
-
-```powershell
-python -c "import torch; print(torch.cuda.is_available())"
-```
-
-Salida:
-
-```text
-False
-```
-
-Ejemplo de instalación CPU:
-
-```powershell
-python -m pip install torch
-```
-
-**Funcionamiento:**
-
-```text
-Qwen
- ↓
-CPU
- ↓
-Corrección contextual
-```
-
-La ejecución mediante CPU funciona, aunque la generación puede ser considerablemente más lenta.
-
----
-
-## Ejecución con GPU NVIDIA
-
-Para utilizar CUDA:
-
-```env
-SENTENCE_AI_USE_GPU=true
-```
-
-Primero verificar GPU:
-
-```powershell
-nvidia-smi
-```
-
-### PyTorch CUDA
-
-Si existe PyTorch CPU:
-
-```powershell
-python -m pip uninstall torch torchvision torchaudio -y
-```
-
-Para una instalación CUDA compatible con el entorno utilizado actualmente:
-
-```powershell
-python -m pip install torch --index-url https://download.pytorch.org/whl/cu132
-```
-
-Para este proyecto **no** es obligatorio instalar `torchvision` ni `torchaudio`, ya que Qwen es un modelo de texto.
-
-### Verificar CUDA
-
-```powershell
-python -c "import torch; print('Torch:', torch.__version__); print('CUDA runtime:', torch.version.cuda); print('CUDA disponible:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NO GPU'); print('Arquitecturas:', torch.cuda.get_arch_list() if torch.cuda.is_available() else [])"
-```
-
-Ejemplo:
-
-```text
-Torch: 2.14.1+cu132
-CUDA runtime: 13.2
-CUDA disponible: True
-GPU: NVIDIA GeForce RTX/GTX/MX/etc...
-```
-
-### Comprobar uso de GPU
-
-```powershell
-nvidia-smi
-```
-
-Cuando Qwen está cargado debe aparecer `python.exe` utilizando VRAM.
-
-El Backend mostrará:
-
-```text
-dispositivo: cuda
-```
-
-y posteriormente:
-
-```text
-Corrector contextual listo:
-Qwen/Qwen3-0.6B (cuda)
-```
-
----
-
-## Variables de entorno
-
-Ejemplo de `.env`:
+Ejemplo `.env`:
 
 ```env
 APP_NAME=SignLang API
@@ -706,8 +1780,18 @@ CORS_ORIGINS=http://localhost:5173
 RECOGNITION_INPUT_FPS=30
 HYBRID_DYNAMIC_SAMPLE_FPS=15
 
+WORD_SEQUENCE_FRAMES=30
+WORD_SAMPLE_FPS=15
+WORD_MIN_CONFIDENCE=0.78
+WORD_MIN_GESTURE_FRAMES=12
+WORD_MAX_GESTURE_FRAMES=90
+
 IMPLICIT_LEARNING_ENABLED=true
 IMPLICIT_LEARNING_WEIGHT=0.20
+
+LANGUAGE_EXACT_CORRECTION_BOOST=0.12
+LANGUAGE_EXACT_CORRECTION_AUTO_COUNT=2
+LANGUAGE_PERSONAL_WORD_BOOST=0.025
 
 SENTENCE_AI_ENABLED=true
 SENTENCE_AI_MODEL_ID=Qwen/Qwen3-0.6B
@@ -715,19 +1799,235 @@ SENTENCE_AI_USE_GPU=true
 SENTENCE_AI_MAX_NEW_TOKENS=96
 ```
 
-> ⚠️ No subir `.env` al repositorio. Sí se puede mantener `.env.example`.
+Frontend opcional:
+
+```env
+VITE_POSE_MODEL_URL=
+```
 
 ---
 
-## Git Ignore recomendado
+# Entrenamiento
 
-No deben subirse:
+## Letras estáticas
+
+Se utilizan los scripts del módulo `ai-training`.
+
+Flujo:
+
+```text
+captura
+↓
+dataset
+↓
+preprocesamiento
+↓
+MLP
+↓
+ONNX
+```
+
+## Letras dinámicas
+
+```text
+captura secuencial
+↓
+30 frames
+↓
+LSTM
+↓
+ONNX
+```
+
+## Palabras completas
+
+Entrar:
+
+```powershell
+cd ai-training\word_mode
+```
+
+Instalar requerimientos utilizando el mismo entorno del Backend:
+
+```powershell
+instalar_requisitos.bat
+```
+
+Abrir menú:
+
+```powershell
+iniciar_entrenamiento.bat
+```
+
+### Capturar
+
+```text
+1. Capturar muestras con CAMARA
+```
+
+### Importar video
+
+```text
+2. Importar muestra desde VIDEO
+```
+
+### Entrenar
+
+```text
+3. Entrenar y exportar modelo ONNX
+```
+
+### Exportar sin reentrenar
+
+```text
+4. Exportar ultimo word_model.pt a ONNX
+```
+
+Archivos finales:
+
+```text
+backend/app/ai/models/
+├── word_model.onnx
+├── scaler_word.pkl
+└── word_labels.json
+```
+
+---
+
+# Ejecución con CPU
+
+Qwen:
+
+```env
+SENTENCE_AI_USE_GPU=false
+```
+
+Verificar:
+
+```powershell
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
+El reconocimiento ONNX continúa funcionando sin GPU.
+
+---
+
+# Ejecución con GPU NVIDIA
+
+Qwen y entrenamiento PyTorch pueden utilizar CUDA.
+
+Verificar:
+
+```powershell
+nvidia-smi
+```
+
+y:
+
+```powershell
+python -c "import torch; print('Torch:', torch.__version__); print('CUDA runtime:', torch.version.cuda); print('CUDA disponible:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NO GPU')"
+```
+
+El proyecto no fija una única versión binaria de CUDA para todos los equipos. Debe instalarse una build de PyTorch compatible con la GPU, driver y versión de Python utilizados.
+
+---
+
+# Ejecución diaria
+
+## Backend
+
+```powershell
+cd backend
+venv\Scripts\activate
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Backend:
+
+```text
+http://127.0.0.1:8000
+```
+
+Swagger:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+## Frontend
+
+```powershell
+cd frontend
+npm run dev
+```
+
+Abrir:
+
+```text
+http://localhost:5173
+```
+
+---
+
+# Archivos importantes
+
+## Modelos
+
+```text
+backend/app/ai/models/
+├── gesture_model.onnx
+├── gesture_model.onnx.data
+├── lstm_model.onnx
+├── lstm_model.onnx.data
+├── word_model.onnx
+├── scaler_static.pkl
+├── scaler_dynamic.pkl
+├── scaler_word.pkl
+└── word_labels.json
+```
+
+## MediaPipe frontend
+
+```text
+frontend/public/hand_landmarker.task
+```
+
+## Diccionario
+
+```text
+backend/app/data/hunspell/
+├── es_PE.aff
+└── es_PE.dic
+```
+
+## Qwen
+
+```text
+backend/data/models/qwen3-0.6b/
+```
+
+## Base de datos
+
+```text
+backend/data/app.db
+```
+
+## Dataset de palabras
+
+```text
+ai-training/word_mode/dataset/
+```
+
+---
+
+# Git Ignore recomendado
 
 ```gitignore
 # Python
 venv/
 __pycache__/
 *.pyc
+*.pyo
 
 # Node
 node_modules/
@@ -745,8 +2045,11 @@ backend/data/app.db-shm
 # Qwen
 backend/data/models/
 
-# Cache ML
+# Ranker ML local
 backend/app/ml/*.joblib
+
+# Modelos/checkpoints temporales de entrenamiento
+ai-training/word_mode/word_model.pt
 
 # IDE
 .vscode/
@@ -757,665 +2060,73 @@ backend/app/ml/*.joblib
 Thumbs.db
 ```
 
-Los modelos ONNX pueden mantenerse en Git únicamente si su tamaño lo permite. Para modelos grandes se recomienda **Git LFS**.
+> Los modelos ONNX o datasets grandes pueden gestionarse con Git LFS o mediante almacenamiento externo.
 
 ---
 
-## Base de datos
+# Problemas frecuentes
 
-SignLang utiliza:
-
-```text
-SQLite
-```
-
-Archivo:
-
-```text
-backend/data/app.db
-```
-
-SQLAlchemy administra la conexión y modelos. Al iniciar FastAPI se ejecuta la creación automática de las tablas faltantes.
-
-Conceptualmente:
-
-```python
-Base.metadata.create_all(bind=engine)
-```
-
-### Tablas principales
-
-```text
-users
-user_profiles
-refresh_tokens
-sessions
-predictions
-learning_events
-user_confusions
-user_bigrams
-user_trigrams
-user_word_stats
-ranker_training_examples
-words
-```
-
-### Relaciones principales
-
-```text
-users
-  │
-  ├── user_profiles
-  ├── refresh_tokens
-  ├── sessions
-  │      └── predictions
-  │
-  ├── learning_events
-  ├── user_confusions
-  ├── user_bigrams
-  ├── user_trigrams
-  └── user_word_stats
-```
-
-### Comprobar base
+## `No module named cv2`
 
 ```powershell
-python scripts\check_database.py
+python -m pip install opencv-contrib-python
 ```
 
 ---
 
-## Sistema de aprendizaje
-
-El corrector puede almacenar patrones propios de cada usuario.
-
-**Ejemplo:**
-
-```text
-Captura:
-
-HBXA
-```
-
-**Interpretación:**
-
-```text
-HOLA
-```
-
-El sistema puede registrar `HBXA → HOLA` y detectar relaciones como:
-
-```text
-B → O
-X → L
-```
-
-### Aprendizaje implícito
-
-Si el sistema genera `HBXA → HOLA` y el usuario continúa escribiendo sin modificar `HOLA`, se puede registrar como evidencia débil.
-
-**Ejemplo:**
-
-```text
-weight = 0.20
-```
-
-### Aprendizaje explícito
-
-Si el usuario selecciona o corrige directamente una palabra:
-
-```text
-weight = 1.0
-```
-
-Esto permite distinguir entre *suposición del sistema* y *confirmación real del usuario*.
-
----
-
-## Reconocimiento de señas
-
-### Reconocimiento estático
-
-La cámara envía landmarks al Backend. El sistema no acepta inmediatamente cada resultado. La letra debe mantenerse estable durante un periodo mínimo.
-
-**Ejemplo:**
-
-```text
-Predicción H
-   ↓
-¿confianza suficiente?
-   ↓
-Sí
-   ↓
-¿estable temporalmente?
-   ↓
-Sí
-   ↓
-Agregar H
-```
-
-Esto reduce caracteres aleatorios producidos durante movimientos de transición.
-
-### Reconocimiento dinámico
-
-Las señas dinámicas utilizan una secuencia de frames.
-
-```text
-Frame 1
-Frame 2
-Frame 3
-...
-Frame 30
-   ↓
-LSTM
-   ↓
-J / Ñ / Z
-```
-
-El reconocimiento híbrido permite combinar automáticamente MLP y LSTM.
-
----
-
-## Corrección de palabras
-
-La corrección utiliza varias fuentes:
-
-```text
-Hunspell
-+
-wordfreq
-+
-Levenshtein
-+
-matriz de confusión
-+
-bigramas
-+
-trigramas
-+
-aprendizaje del usuario
-+
-SGDClassifier
-```
-
-**Ejemplo:**
-
-```text
-HBXA
-```
-
-**Candidatos:**
-
-```text
-HOLA
-HORA
-HOJA
-```
-
-Después se calcula un score para determinar cuál es la opción más probable.
-
-### Palabra original y palabra interpretada
-
-El sistema conserva dos estados diferentes:
-
-```text
-raw_word
-```
-
-Ejemplo:
-
-```text
-HBXA
-```
-
-y:
-
-```text
-resolved_word
-```
-
-Ejemplo:
-
-```text
-HOLA
-```
-
-Esto permite aprender del error original sin mostrar al usuario permanentemente una palabra incorrecta.
-
----
-
-## Corrección contextual
-
-Una frase puede ser correcta a nivel de palabras individuales y aun así ser poco natural.
-
-**Ejemplo:**
-
-```text
-hola como estdn hpy hacx fñoi
-```
-
-Qwen recibe la oración y produce una versión contextual:
-
-```text
-Hola, ¿cómo están? Hoy hace frío.
-```
-
-**Pipeline:**
-
-```text
-Reconocimiento
-      ↓
-Letras
-      ↓
-Corrector de palabras
-      ↓
-Oración preliminar
-      ↓
-Qwen3-0.6B
-      ↓
-Oración contextual
-```
-
-Qwen **no** se ejecuta por frame ni por letra. Se ejecuta cuando se solicita corregir la oración completa. Esto evita afectar el rendimiento del reconocimiento en tiempo real.
-
----
-
-## Uso de la aplicación
-
-### 1. Abrir aplicación
-
-Acceder a:
-
-```text
-http://localhost:5173
-```
-
-### 2. Autorizar cámara
-
-El navegador solicitará permiso. Seleccionar **Permitir**.
-
-### 3. Colocar mano frente a cámara
-
-MediaPipe mostrará los landmarks detectados.
-
-### 4. Realizar una seña
-
-El panel mostrará: letra, confianza y modo de reconocimiento.
-
-**Ejemplo:**
-
-```text
-H
-
-96.4 %
-
-Estático
-```
-
-### 5. Construir palabra
-
-```text
-H
-↓
-HO
-↓
-HOL
-↓
-HOLA
-```
-
-### 6. Finalizar palabra
-
-Seleccionar **Finalizar palabra**. La palabra se añade a la oración.
-
-### 7. Revisar sugerencias
-
-Si existe una posible corrección para `HBXA`, el sistema puede mostrar:
-
-```text
-HOLA
-HORA
-HOJA
-```
-
-### 8. Corregir oración completa
-
-Cuando exista una oración como:
-
-```text
-HOLA COMO ESTDN HPY HACX FÑOI
-```
-
-seleccionar **Corregir oración con IA**.
-
-**Resultado:**
-
-```text
-Hola, ¿cómo están? Hoy hace frío.
-```
-
-### 9. Limpiar
-
-La interfaz dispone de:
-
-```text
-Borrar último
-Limpiar
-Finalizar palabra
-Corregir oración con IA
-```
-
----
-
-## API
-
-FastAPI proporciona documentación interactiva en:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-**Principales grupos:**
-
-```text
-/api/auth
-/api/users
-/api/sessions
-/api/language
-/api/learning
-```
-
-### Autenticación
-
-| Acción | Endpoint |
-|---|---|
-| Registro | `POST /api/auth/register` |
-| Login | `POST /api/auth/login` |
-| Refresh | `POST /api/auth/refresh` |
-| Logout | `POST /api/auth/logout` |
-| Usuario actual | `GET /api/auth/me` |
-
----
-
-## WebSocket
-
-**Reconocimiento:**
-
-```text
-/ws/recognition
-```
-
-Con usuario autenticado:
-
-```text
-/ws/recognition?token=ACCESS_TOKEN
-```
-
-**Ejemplo de mensaje:**
-
-```json
-{
-  "mode": "hybrid",
-  "landmarks": []
-}
-```
-
-### Corrección contextual
-
-**Mensaje:**
-
-```json
-{
-  "mode": "correct_sentence",
-  "sentence": "hola como estdn hpy hacx fñoi"
-}
-```
-
-**Respuesta esperada:**
-
-```json
-{
-  "kind": "sentence_correction",
-  "sentence_correction": {
-    "original": "hola como estdn hpy hacx fñoi",
-    "corrected": "Hola, ¿cómo están? Hoy hace frío.",
-    "changed": true,
-    "model": "Qwen/Qwen3-0.6B",
-    "device": "cuda"
-  }
-}
-```
-
----
-
-## Ejecución diaria
-
-Una vez instalado el proyecto, no es necesario volver a instalar dependencias.
-
-### Terminal 1 — Backend
+## `Module onnx is not installed`
 
 ```powershell
-cd backend
-
-venv\Scripts\activate
-
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+python -m pip install onnx
 ```
 
-### Terminal 2 — Frontend
+o:
 
 ```powershell
-cd frontend
-
-npm run dev
-```
-
-Abrir:
-
-```text
-http://localhost:5173
+ai-training\word_mode\exportar_onnx.bat
 ```
 
 ---
 
-## Instalación después de un nuevo Git Clone
+## Cámara no abre en entrenamiento
+
+El capturador del modo Palabra:
+
+- busca cámaras disponibles;
+- prueba DirectShow en Windows;
+- verifica frames reales.
+
+Si una cámara está ocupada, cerrar:
 
 ```text
-git clone
-   │
-   ├── Backend
-   │     │
-   │     ├── python -m venv venv
-   │     ├── venv\Scripts\activate
-   │     ├── pip install -r requirements.txt
-   │     ├── instalar PyTorch CUDA si aplica
-   │     ├── descargar Qwen
-   │     └── iniciar Uvicorn
-   │
-   └── Frontend
-         │
-         ├── npm ci
-         └── npm run dev
-```
-
-**Backend:**
-
-```powershell
-cd backend
-
-python -m venv venv
-
-venv\Scripts\activate
-
-python -m pip install -r requirements.txt
-```
-
-**Qwen:**
-
-```powershell
-python -m scripts.download_qwen_model
-```
-
-**Backend:**
-
-```powershell
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-**Frontend:**
-
-```powershell
-cd frontend
-
-npm ci
-
-npm run dev
+OBS
+NVIDIA Broadcast
+Teams
+Discord
+otros programas de cámara
 ```
 
 ---
 
-## Archivos que no deben perderse
-
-### Modelos de reconocimiento
-
-```text
-backend/app/ai/models/
-├── gesture_model.onnx
-├── gesture_model.onnx.data
-├── lstm_model.onnx
-├── lstm_model.onnx.data
-├── scaler_static.pkl
-└── scaler_dynamic.pkl
-```
-
-### MediaPipe
-
-```text
-frontend/public/hand_landmarker.task
-```
-
-### Diccionario
-
-```text
-backend/app/data/hunspell/
-├── es_PE.aff
-└── es_PE.dic
-```
-
-### Qwen
-
-```text
-backend/data/models/qwen3-0.6b/
-└── model.safetensors
-```
-
-### Persistencia
-
-```text
-backend/data/app.db
-```
-
-Si `app.db` no existe, el sistema puede crear una nueva base de datos. Sin embargo, se perderán los usuarios y datos aprendidos existentes.
-
----
-
-## Problemas frecuentes
-
-### `uvicorn` no se reconoce
-
-Activar:
-
-```powershell
-venv\Scripts\activate
-```
-
-y ejecutar:
-
-```powershell
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-### `No module named pwdlib`
-
-```powershell
-python -m pip install "pwdlib[argon2]" email-validator
-```
-
-### `No module named app`
-
-Ejecutar scripts como módulo desde `backend/`:
-
-```powershell
-python -m scripts.download_qwen_model
-```
-
-### Qwen utiliza CPU
-
-Comprobar:
+## Qwen utiliza CPU
 
 ```powershell
 python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available())"
 ```
 
-Si aparece:
+---
 
-```text
-2.x.x+cpu
-None
-False
-```
+## Backend desconectado
 
-se está utilizando PyTorch CPU. Instalar CUDA:
-
-```powershell
-python -m pip uninstall torch -y
-```
-
-```powershell
-python -m pip install torch --index-url https://download.pytorch.org/whl/cu132
-```
-
-### Comprobar GPU
-
-```powershell
-python -c "import torch; print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NO GPU')"
-```
-
-Ejemplo:
-
-```text
-NVIDIA GeForce RTX 5060
-```
-
-### Qwen no carga
-
-Descargar nuevamente:
-
-```powershell
-python -m scripts.download_qwen_model
-```
-
-Verificar:
-
-```text
-backend/data/models/qwen3-0.6b/model.safetensors
-```
-
-### Backend desconectado
-
-Comprobar que FastAPI esté activo:
+Comprobar:
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-Después revisar:
+---
 
-```text
-ws://127.0.0.1:8000/ws/recognition
-```
-
-### Error de versión de scaler
+## Error de scaler
 
 Si aparece:
 
@@ -1423,39 +2134,108 @@ Si aparece:
 InconsistentVersionWarning
 ```
 
-significa que el `StandardScaler` fue guardado con una versión diferente de scikit-learn. Lo recomendable es mantener la misma versión utilizada durante entrenamiento.
+el scaler fue creado con una versión diferente de scikit-learn.
+
+Para reproducibilidad se recomienda entrenar y ejecutar con el mismo entorno.
 
 ---
 
-## Flujo técnico final
+## El modelo de palabras no aparece
 
-<img width="720" height="1600" alt="signlang_flujo_animado" src="https://github.com/user-attachments/assets/b4377a11-521c-4201-bd55-1a1dee6ffa4e" />
+Comprobar:
 
----
+```text
+backend/app/ai/models/word_model.onnx
+backend/app/ai/models/scaler_word.pkl
+backend/app/ai/models/word_labels.json
+```
 
-## Estado del proyecto
+El Backend indicará:
 
-Actualmente SignLang dispone de:
+```text
+Modelo de palabras aun no entrenado
+```
 
-- Reconocimiento de señas estáticas.
-- Reconocimiento de señas dinámicas.
-- Reconocimiento híbrido MLP/LSTM.
-- Estabilización temporal de letras.
-- Corrección de palabras.
-- Autocompletado.
-- Diccionario español.
-- Aprendizaje personalizado.
-- Usuarios y autenticación.
-- Persistencia SQLite.
-- Registro de sesiones.
-- Corrección contextual mediante Qwen.
-- Ejecución Qwen mediante CPU o GPU NVIDIA.
-- Frontend web interactivo.
-- Comunicación en tiempo real mediante WebSocket.
+si alguno falta.
 
 ---
 
-## Próximas mejoras
+# Flujo técnico final
+
+<div align="center">
+<img width="720" height="1600" alt="Flujo técnico animado de SignLang" src="https://github.com/user-attachments/assets/b4377a11-521c-4201-bd55-1a1dee6ffa4e" />
+</div>
+
+> El diagrama visual anterior corresponde al flujo general del proyecto. A continuación se muestra el flujo técnico actualizado, incluyendo el nuevo modo de reconocimiento de palabras completas.
+
+
+```text
+                              CÁMARA
+                                │
+                     ┌──────────┴──────────┐
+                     │                     │
+                     ▼                     ▼
+                MODO LETRA           MODO PALABRA
+                     │                     │
+                     ▼                     ▼
+              Hand Landmarker       Hands + Pose
+                     │                     │
+              ┌──────┴──────┐              │
+              ▼             ▼              ▼
+             MLP           LSTM       30 × 192
+          ESTÁTICO       DINÁMICO          │
+              │           J/Ñ/Z            ▼
+              └──────┬──────┘        LSTM PALABRAS
+                     │                     │
+                     └──────────┬──────────┘
+                                ▼
+                         TEXTO RECONOCIDO
+                                │
+                                ▼
+                  ┌──────────────────────────┐
+                  │ CORRECTOR LINGÜÍSTICO    │
+                  │                          │
+                  │ Hunspell                 │
+                  │ wordfreq                 │
+                  │ RapidFuzz                │
+                  │ Levenshtein              │
+                  │ matriz de confusión      │
+                  │ bigramas / trigramas     │
+                  │ memoria del usuario      │
+                  │ SGDClassifier            │
+                  └────────────┬─────────────┘
+                               ▼
+                         ORACIÓN BASE
+                               │
+                               ▼
+                          Qwen3-0.6B
+                               │
+                     ┌─────────┴─────────┐
+                     ▼                   ▼
+                  TEXTO                 VOZ
+```
+
+---
+
+# Diseño del sistema
+
+<div align="center">
+<img width="1898" height="1079" alt="Diseño del sistema SignLang" src="https://github.com/user-attachments/assets/bd5a07b2-6d37-4c59-8c83-a35cde2ee86e" />
+</div>
+
+---
+
+# Diseño de EndPoints
+
+<div align="center">
+<img width="1013" height="1079" alt="Diseño de EndPoints" src="https://github.com/user-attachments/assets/66228732-7837-4182-9f29-11acd3ee29f5" />
+</div>
+
+---
+
+# Próximas mejoras
+
+Las futuras implementaciones definidas actualmente para el proyecto son:
 
 - Ampliación del dataset.
 - Mejora del reconocimiento dinámico.
@@ -1472,21 +2252,27 @@ Actualmente SignLang dispone de:
 
 ---
 
-## Autores
 
-| Nombre | Rol | Contacto |
-|---|---|---|
-| Chacon Mayta Frans Rooswvelt | Desarrollador principal | - |
-| Mamani Pineda Geremias Levi | Desarrollador Frontend | - |
-| Postigo Chumacero | Alvaro Zahid | DATA/AI |
+# Equipo del proyecto
 
-Proyecto desarrollado como parte de una propuesta de **Traductor Inteligente de Lengua de Señas mediante Machine Learning y Visión por Computadora**.
+<div align="center">
+<img width="960" height="480" alt="Equipo SignLang" src="https://github.com/user-attachments/assets/dd25f904-c089-4220-95d4-adadba78929d" />
+</div>
+
+| Integrante | Participación |
+|---|---|
+| **Chaco Mayta Frans Rooswvelt** | Integrante del equipo de desarrollo |
+| **Mamani Pineda Geremias Levi** | Integrante del equipo de desarrollo |
+| **Postigo Chumacero Alvaro Zahid** | Integrante del equipo de desarrollo |
+
+Proyecto desarrollado como propuesta de **Traductor Inteligente de Lengua de Señas mediante Machine Learning, Visión por Computadora e Inteligencia Artificial**.
 
 ---
 
-## Historial de diseño
 
-### Diseño del Sistema — Versión 0.1
+# Historial de diseño
+
+## Diseño del Sistema — Versión inicial
 
 <div align="center">
 <img src="https://github.com/user-attachments/assets/22325a3e-60a8-4b85-b603-4451089098ac" alt="Diseño inicial de SignLang" width="820"/>
@@ -1498,6 +2284,6 @@ Proyecto desarrollado como parte de una propuesta de **Traductor Inteligente de 
 
 **SignLang** · Traductor Inteligente de Lengua de Señas
 
-Hecho con ❤️ para derribar barreras de comunicación
+**Machine Learning · Visión por Computadora · IA Contextual · Accesibilidad**
 
 </div>
