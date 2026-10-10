@@ -1,32 +1,39 @@
-# React + TypeScript + Vite
+# Sign-lang Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Frontend React + TypeScript + Vite para el sistema Sign-lang.
 
-Currently, two official plugins are available:
+## Flujo principal
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. `App.tsx` controla autenticación y navegación entre páginas.
+2. `services/auth.ts` administra login, registro, refresh token, perfil y conexión con FastAPI.
+3. `Translator.tsx` abre cámara, ejecuta MediaPipe HandLandmarker y envía landmarks al WebSocket del backend.
+4. El backend devuelve reconocimiento, corrección de palabras, aprendizaje y corrección contextual.
+5. `Statistics.tsx` y `Dashboard.tsx` consultan `/api/sessions` y `/api/sessions/{id}/predictions` para mostrar datos reales del usuario.
+6. `Settings.tsx` guarda perfil en el backend y preferencias visuales en `localStorage`.
 
-## React Compiler
+## Variables de entorno
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Copia `.env.example` a `.env` si necesitas cambiar las URLs:
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```env
+VITE_API_URL=http://127.0.0.1:8000
+VITE_WS_URL=ws://127.0.0.1:8000/ws/recognition
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Instalar
+
+```bash
+npm ci
+```
+
+## Desarrollo
+
+```bash
+npm run dev
+```
+
+## Build
+
+```bash
+npm run build
+```

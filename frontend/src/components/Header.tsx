@@ -1,12 +1,21 @@
 interface HeaderProps {
   title: string;
   onMenuClick: () => void;
+  backendOnline: boolean | null;
 }
 
 function Header({
   title,
   onMenuClick,
+  backendOnline,
 }: HeaderProps) {
+  const statusLabel =
+    backendOnline === null
+      ? "Verificando..."
+      : backendOnline
+        ? "Sistema activo"
+        : "Backend sin conexión";
+
   return (
     <header className="main-header">
       <div className="header-left">
@@ -24,9 +33,13 @@ function Header({
         </div>
       </div>
 
-      <div className="system-status">
+      <div
+        className={`system-status ${
+          backendOnline === false ? "offline" : backendOnline === null ? "checking" : ""
+        }`}
+      >
         <span />
-        Sistema activo
+        {statusLabel}
       </div>
     </header>
   );

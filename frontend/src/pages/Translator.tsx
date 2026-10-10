@@ -1,23 +1,46 @@
+/**
+ * Pantalla principal de traducción. Orquesta cámara, MediaPipe, WebSocket, modo Letras/Palabras, sugerencias, Qwen y TTS.
+ */
+
 import { useEffect, useRef, useState } from "react";
 import {
   FilesetResolver,
   HandLandmarker,
+  PoseLandmarker,
 } from "@mediapipe/tasks-vision";
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
+import useTextToSpeech from "../hooks/useTextToSpeech";
+import { API_URL } from "../services/auth";
+import {
+  getAutoTtsEnabled,
+  getAutoTtsMode,
+  setAutoTtsEnabled,
+  setAutoTtsMode,
+} from "../services/preferences";
+import type { AutoTtsMode } from "../services/preferences";
+import {
+  buildWordFrameFeatures,
+  drawPoseLandmarks,
+  POSE_MODEL_URL,
+} from "../services/wordVision";
 
-const WS_URL = "ws://localhost:8000/ws/recognition";
+const WS_URL =
+  import.meta.env.VITE_WS_URL ??
+  `${API_URL.replace(/^http/, "ws")}/ws/recognition`;
 
 const buildWsUrl = () => {
-  const token = window.localStorage.getItem("signlang_access_token");
-  if (!token) return WS_URL;
-  const separator = WS_URL.includes("?") ? "&" : "?";
-  return `${WS_URL}${separator}token=${encodeURIComponent(token)}`;
+const token = window.localStorage.getItem("signlang_access_token");
+if (!token) return WS_URL;
+const separator = WS_URL.includes("?") ? "&" : "?";
+return `${WS_URL}${separator}token=${encodeURIComponent(token)}`;
 };
 
 const MODEL_URL = "/hand_landmarker.task";
 
 const RECOGNITION_FPS = 30;
+const WORD_RECOGNITION_FPS = 15;
 const SEND_INTERVAL_MS = 1000 / RECOGNITION_FPS;
+const WORD_SEND_INTERVAL_MS = 1000 / WORD_RECOGNITION_FPS;
 
 // Si J/Z no coinciden con la orientacion usada durante entrenamiento, prueba true.
 const MIRROR_LANDMARK_X = false;
@@ -25,8 +48,11 @@ const MIRROR_LANDMARK_X = false;
 // Si la mano permanece fuera este tiempo, se cierra/corrige la palabra.
 // Una ausencia mas corta solo desbloquea letras repetidas, por ejemplo LL.
 const WORD_GAP_MS = 950;
+// En modo Palabra no cerramos el gesto ante un único frame perdido.
+const WORD_HAND_ABSENCE_MS = 280;
 
-type RecognitionMode = "static" | "dynamic" | "none";
+type RecognitionMode = "static" | "dynamic" | "word" | "none";
+type RecognitionInputMode = "letter" | "word";
 
 type Suggestion = {
   word: string;
@@ -40,6 +66,13 @@ type Suggestion = {
   frequency: number;
   dictionary?: boolean;
   completion?: boolean;
+};
+
+type SentenceItem = {
+  index: number;
+  raw: string;
+  word: string;
+  suggestions: Suggestion[];
 };
 
 type PendingFeedback = {
@@ -87,7 +120,11 @@ type LanguageState = {
   autocorrect_active?: boolean;
   resolution_reason?: string;
   suggestions: Suggestion[];
+  suggestion_scope?: "current" | "last_finalized" | "none";
+  suggestion_source_word?: string;
+  last_finalized_word?: string;
   sentence_words: string[];
+  sentence_items?: SentenceItem[];
   sentence: string;
   display_text: string;
   event: LanguageEvent;
@@ -101,7 +138,11 @@ const EMPTY_LANGUAGE_STATE: LanguageState = {
   preview_word: "",
   autocorrect_active: false,
   suggestions: [],
+  suggestion_scope: "none",
+  suggestion_source_word: "",
+  last_finalized_word: "",
   sentence_words: [],
+  sentence_items: [],
   sentence: "",
   display_text: "",
   event: null,
@@ -109,6 +150,18 @@ const EMPTY_LANGUAGE_STATE: LanguageState = {
     pending_feedback: null,
     stats: {},
   },
+};
+
+function formatWordLabel(value: unknown) {
+  return String(value ?? "")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+type WordCandidate = {
+  word: string;
+  confidence: number;
 };
 
 function Translator() {
@@ -122,31 +175,65 @@ function Translator() {
     clearText: clearSpeechText,
   } = useSpeechRecognition();
 
+  const {
+    speak: speakTranslation,
+    stop: stopTranslationSpeech,
+    isSpeaking: translationSpeaking,
+    supported: ttsSupported,
+  } = useTextToSpeech();
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const landmarkerRef = useRef<HandLandmarker | null>(null);
+  const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
   const animationRef = useRef<number>(0);
   const lastSentAtRef = useRef<number>(0);
   const frameInFlightRef = useRef(false);
   const frameRequestIdRef = useRef(0);
   const frameTimeoutRef = useRef<number | null>(null);
   const hadHandRef = useRef(false);
+  const wordHandAbsentSinceRef = useRef<number | null>(null);
   const wordGapTimerRef = useRef<number | null>(null);
+  const recognitionInputModeRef = useRef<RecognitionInputMode>("letter");
+  const autoTtsRef = useRef(getAutoTtsEnabled());
+  const autoTtsModeRef = useRef<AutoTtsMode>(getAutoTtsMode());
 
   const [letter, setLetter] = useState("-");
   const [confidence, setConfidence] = useState(0);
   const [recognitionMode, setRecognitionMode] =
     useState<RecognitionMode>("none");
+  const [recognitionInputMode, setRecognitionInputMode] =
+    useState<RecognitionInputMode>("letter");
   const [status, setStatus] = useState("Iniciando...");
   const [connected, setConnected] = useState(false);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCamera, setSelectedCamera] = useState("");
+  const [cameraFacing, setCameraFacing] =
+    useState<"user" | "environment">("user");
   const [language, setLanguage] = useState<LanguageState>(
     EMPTY_LANGUAGE_STATE,
   );
   const [manualCorrection, setManualCorrection] = useState("");
+  const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [aiSentence, setAiSentence] = useState("");
   const [aiCorrecting, setAiCorrecting] = useState(false);
   const [aiCorrectionError, setAiCorrectionError] = useState("");
+  const [autoTts, setAutoTts] = useState(() => getAutoTtsEnabled());
+  const [autoTtsMode, setAutoTtsModeState] =
+    useState<AutoTtsMode>(() => getAutoTtsMode());
+  const [wordBuffer, setWordBuffer] = useState(0);
+  const [wordGestureFrames, setWordGestureFrames] = useState(0);
+  const [wordCandidates, setWordCandidates] = useState<WordCandidate[]>([]);
+  const [showLandmarks] = useState(
+    () => localStorage.getItem("show_landmarks") !== "false",
+  );
+
+  const selectedSentenceItem =
+    selectedWordIndex !== null
+      ? language.sentence_items?.[selectedWordIndex] ?? null
+      : null;
 
   const sendCommand = (payload: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -183,14 +270,60 @@ function Translator() {
   };
 
   useEffect(() => {
+    recognitionInputModeRef.current = recognitionInputMode;
+    setLetter("-");
+    setConfidence(0);
+    setRecognitionMode("none");
+    setWordBuffer(0);
+    setWordGestureFrames(0);
+    setWordCandidates([]);
+    wordHandAbsentSinceRef.current = null;
+    setAiSentence("");
+    setSelectedWordIndex(null);
+    cancelWordGapTimer();
+    sendCommand({ mode: "clear_language" });
+    sendCommand({ mode: "reset" });
+  // El cambio de modo debe limpiar el buffer del backend una sola vez.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recognitionInputMode]);
+
+  useEffect(() => {
+    autoTtsRef.current = autoTts;
+    setAutoTtsEnabled(autoTts);
+    if (!autoTts) stopTranslationSpeech();
+  }, [autoTts, stopTranslationSpeech]);
+
+  useEffect(() => {
+    autoTtsModeRef.current = autoTtsMode;
+    setAutoTtsMode(autoTtsMode);
+  }, [autoTtsMode]);
+const loadCameras = async () => {
+  try {
+    const devices =
+      await navigator.mediaDevices.enumerateDevices();
+
+    const videoDevices = devices.filter(
+      (device) => device.kind === "videoinput"
+    );
+
+    setCameras(videoDevices);
+
+    return videoDevices;
+  } catch (error) {
+    console.error("Error detectando cámaras:", error);
+    return [];
+  }
+};
+  useEffect(() => {
     let stream: MediaStream | null = null;
+    let cancelled = false;
 
     const detectLoop = () => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      const landmarker = landmarkerRef.current;
+      const handLandmarker = landmarkerRef.current;
 
-      if (!video || !canvas || !landmarker) {
+      if (!video || !canvas || !handLandmarker) {
         animationRef.current = requestAnimationFrame(detectLoop);
         return;
       }
@@ -202,59 +335,98 @@ function Translator() {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-          const result = landmarker.detectForVideo(
-            video,
-            performance.now(),
-          );
+          const now = performance.now();
+          const handResult = handLandmarker.detectForVideo(video, now);
+          const hasHands = Boolean(handResult.landmarks?.length);
 
-          if (result.landmarks && result.landmarks.length > 0) {
+          if (hasHands) {
             cancelWordGapTimer();
+            wordHandAbsentSinceRef.current = null;
+            hadHandRef.current = true;
 
-            for (const hand of result.landmarks) {
+            if (showLandmarks) {
               ctx.fillStyle = "#22c55e";
-
-              for (const lm of hand) {
-                const x = lm.x * canvas.width;
-                const y = lm.y * canvas.height;
-
-                ctx.beginPath();
-                ctx.arc(x, y, 4, 0, Math.PI * 2);
-                ctx.fill();
+              for (const hand of handResult.landmarks ?? []) {
+                for (const lm of hand) {
+                  ctx.beginPath();
+                  ctx.arc(
+                    lm.x * canvas.width,
+                    lm.y * canvas.height,
+                    4,
+                    0,
+                    Math.PI * 2,
+                  );
+                  ctx.fill();
+                }
               }
             }
 
-            const firstHand = result.landmarks[0];
-            hadHandRef.current = true;
-
-            const landmarks = firstHand.flatMap((lm) => [
-              MIRROR_LANDMARK_X ? 1 - lm.x : lm.x,
-              lm.y,
-              lm.z,
-            ]);
-
-            const now = performance.now();
-
             if (
-              now - lastSentAtRef.current >= SEND_INTERVAL_MS &&
+              now - lastSentAtRef.current >=
+                (recognitionInputModeRef.current === "word"
+                  ? WORD_SEND_INTERVAL_MS
+                  : SEND_INTERVAL_MS) &&
               wsRef.current?.readyState === WebSocket.OPEN &&
               !frameInFlightRef.current
             ) {
               lastSentAtRef.current = now;
               frameInFlightRef.current = true;
               frameRequestIdRef.current += 1;
-
               const requestId = frameRequestIdRef.current;
 
-              wsRef.current.send(
-                JSON.stringify({
-                  mode: "hybrid",
-                  request_id: requestId,
-                  timestamp_ms: now,
-                  landmarks,
-                }),
-              );
+              if (recognitionInputModeRef.current === "word") {
+                const poseLandmarker = poseLandmarkerRef.current;
+                if (!poseLandmarker) {
+                  releaseFrame();
+                  setStatus("Cargando detector corporal...");
+                } else {
+                  const poseResult = poseLandmarker.detectForVideo(video, now);
 
-              // Seguridad: si una respuesta se pierde, no congelamos la cámara.
+                  if (showLandmarks) {
+                    drawPoseLandmarks(
+                      ctx,
+                      poseResult,
+                      canvas.width,
+                      canvas.height,
+                    );
+                  }
+
+                  const features = buildWordFrameFeatures(
+                    handResult,
+                    poseResult,
+                  );
+
+                  wsRef.current.send(
+                    JSON.stringify({
+                      mode: "word",
+                      request_id: requestId,
+                      timestamp_ms: now,
+                      features,
+                    }),
+                  );
+                }
+              } else {
+                const firstHand = handResult.landmarks?.[0];
+                if (!firstHand) {
+                  releaseFrame();
+                } else {
+                  const landmarks = firstHand.flatMap((lm) => [
+                    MIRROR_LANDMARK_X ? 1 - lm.x : lm.x,
+                    lm.y,
+                    lm.z,
+                  ]);
+
+                  wsRef.current.send(
+                    JSON.stringify({
+                      mode: "hybrid",
+                      request_id: requestId,
+                      timestamp_ms: now,
+                      landmarks,
+                    }),
+                  );
+                }
+              }
+
               clearFrameTimeout();
               frameTimeoutRef.current = window.setTimeout(() => {
                 frameInFlightRef.current = false;
@@ -262,12 +434,30 @@ function Translator() {
               }, 700);
             }
           } else if (hadHandRef.current) {
-            // La mano acaba de desaparecer.
-            hadHandRef.current = false;
-            lastSentAtRef.current = 0;
+            if (recognitionInputModeRef.current === "word") {
+              if (wordHandAbsentSinceRef.current === null) {
+                wordHandAbsentSinceRef.current = now;
+              }
 
-            sendCommand({ mode: "hand_absent" });
-            scheduleWordFinalization();
+              if (
+                now - wordHandAbsentSinceRef.current >=
+                WORD_HAND_ABSENCE_MS
+              ) {
+                hadHandRef.current = false;
+                wordHandAbsentSinceRef.current = null;
+                lastSentAtRef.current = 0;
+                releaseFrame();
+                setStatus("Evaluando gesto...");
+                sendCommand({ mode: "hand_absent" });
+              }
+            } else {
+              hadHandRef.current = false;
+              wordHandAbsentSinceRef.current = null;
+              lastSentAtRef.current = 0;
+              releaseFrame();
+              sendCommand({ mode: "hand_absent" });
+              scheduleWordFinalization();
+            }
           }
         }
       }
@@ -275,127 +465,379 @@ function Translator() {
       animationRef.current = requestAnimationFrame(detectLoop);
     };
 
-    const initialize = async () => {
+
+
+const initialize = async () => {
+  try {
+    // =====================================
+    // 1. CONEXIÓN CON EL BACKEND
+    // =====================================
+    const ws = new WebSocket(buildWsUrl());
+
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      if (cancelled) return;
+
+      releaseFrame();
+      setConnected(true);
+      setStatus("Backend conectado");
+
+      ws.send(
+        JSON.stringify({ mode: "get_language_state" })
+      );
+    };
+
+    ws.onclose = () => {
+      if (cancelled) return;
+
+      releaseFrame();
+      setConnected(false);
+      setStatus("Backend desconectado");
+    };
+
+    ws.onerror = () => {
+      if (cancelled) return;
+
+      releaseFrame();
+      setConnected(false);
+      setStatus("Error de conexión con backend");
+    };
+
+    ws.onmessage = (event) => {
+      if (cancelled) return;
+
       try {
-        const ws = new WebSocket(buildWsUrl());
+        const data = JSON.parse(event.data);
 
-        ws.onopen = () => {
+        if (
+          data.kind === "recognition" ||
+          data.kind === "word_recognition" ||
+          data.letter !== undefined
+        ) {
           releaseFrame();
-          setConnected(true);
-          setStatus("Backend conectado");
-          ws.send(JSON.stringify({ mode: "get_language_state" }));
-        };
-
-        ws.onclose = () => {
-          releaseFrame();
-          setConnected(false);
-          setStatus("Backend desconectado");
-        };
-
-        ws.onerror = () => {
-          releaseFrame();
-          setConnected(false);
-          setStatus("Error de conexion con backend");
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-
-            // El backend responde primero la inferencia visual. Esto libera
-            // inmediatamente el siguiente frame y evita acumular retraso.
-            if (data.kind === "recognition" || data.letter !== undefined) {
-              releaseFrame();
-            }
-
-            if (typeof data.letter === "string") {
-              setLetter(data.letter || "-");
-              setConfidence(Number(data.confidence ?? 0));
-              setRecognitionMode(
-                data.mode === "dynamic"
-                  ? "dynamic"
-                  : data.mode === "static"
-                    ? "static"
-                    : "none",
-              );
-            }
-
-            if (data.language) {
-              setLanguage(data.language as LanguageState);
-            }
-
-            if (data.kind === "sentence_correction") {
-              setAiCorrecting(false);
-              const correction = data.sentence_correction;
-              if (correction?.corrected) {
-                setAiSentence(String(correction.corrected));
-                setAiCorrectionError("");
-              } else {
-                setAiCorrectionError("No se pudo generar una corrección contextual.");
-              }
-            }
-
-            if (data.error) {
-              setAiCorrecting(false);
-              if (String(data.error).toLowerCase().includes("modelo contextual")
-                  || String(data.error).toLowerCase().includes("torch")
-                  || String(data.error).toLowerCase().includes("transform")) {
-                setAiCorrectionError(String(data.error));
-              }
-              releaseFrame();
-              console.warn("Backend:", data.error);
-              setStatus(`Backend: ${String(data.error)}`);
-            }
-          } catch (error) {
-            console.error("Respuesta WebSocket invalida:", error);
-          }
-        };
-
-        wsRef.current = ws;
-
-        setStatus("Cargando detector...");
-
-        const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
-        );
-
-        const landmarker = await HandLandmarker.createFromOptions(
-          vision,
-          {
-            baseOptions: {
-              modelAssetPath: MODEL_URL,
-              delegate: "GPU",
-            },
-            runningMode: "VIDEO",
-            numHands: 2,
-          },
-        );
-
-        landmarkerRef.current = landmarker;
-
-        setStatus("Abriendo camara...");
-
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: "user",
-          },
-          audio: false,
-        });
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
         }
 
-        setStatus("Camara activa");
-        detectLoop();
+        if (typeof data.letter === "string") {
+          setLetter(data.letter || "-");
+          setConfidence(Number(data.confidence ?? 0));
+
+          setRecognitionMode(
+            data.mode === "dynamic"
+              ? "dynamic"
+              : data.mode === "static"
+                ? "static"
+                : "none"
+          );
+        }
+
+        if (data.kind === "word_recognition") {
+          const buffer = Number(data.buffer ?? 0);
+          const gestureFrames = Number(
+            data.gesture_frames ?? buffer,
+          );
+          setWordBuffer(
+            Number.isFinite(buffer) ? Math.max(0, buffer) : 0,
+          );
+          setWordGestureFrames(
+            Number.isFinite(gestureFrames)
+              ? Math.max(0, gestureFrames)
+              : 0,
+          );
+
+          if (Array.isArray(data.top3)) {
+            setWordCandidates(
+              data.top3
+                .map((item: { word?: unknown; confidence?: unknown }) => ({
+                  word: formatWordLabel(item.word),
+                  confidence: Number(item.confidence ?? 0),
+                }))
+                .filter(
+                  (item: WordCandidate) =>
+                    item.word && Number.isFinite(item.confidence),
+                )
+                .slice(0, 3),
+            );
+          }
+
+          const nextWord = formatWordLabel(data.word);
+          const nextConfidence = Number(data.confidence ?? 0);
+
+          // Las respuestas de buffering ya no borran la última inferencia
+          // válida con "-" o 0%.
+          if (
+            nextWord &&
+            nextWord !== "-" &&
+            Number.isFinite(nextConfidence) &&
+            nextConfidence > 0
+          ) {
+            setLetter(nextWord);
+            setConfidence(nextConfidence);
+            setRecognitionMode("word");
+          }
+
+          if (data.error) {
+            setStatus(String(data.error));
+          } else if (data.accepted) {
+            setStatus(`Palabra reconocida: ${nextWord}`);
+          } else if (
+            data.source === "gesture_end" &&
+            data.reason === "low_confidence"
+          ) {
+            setStatus(
+              `Gesto detectado con confianza insuficiente: ${(
+                nextConfidence * 100
+              ).toFixed(1)}%`,
+            );
+          }
+        }
+
+        if (data.language) {
+          const nextLanguage = data.language as LanguageState;
+          setLanguage(nextLanguage);
+
+          const eventType = nextLanguage.event?.type;
+          if (
+            autoTtsRef.current &&
+            (eventType === "word_finalized" ||
+              eventType === "word_sign_added")
+          ) {
+            const completedWord = String(
+              nextLanguage.event?.word ?? "",
+            ).trim();
+
+            if (autoTtsModeRef.current === "continuous") {
+              const fullMessage = String(
+                nextLanguage.display_text ||
+                  nextLanguage.sentence ||
+                  "",
+              ).trim();
+              if (fullMessage) {
+                // SpeechSynthesis.cancel() dentro del hook reinicia la lectura
+                // desde el principio con la oración actualizada.
+                speakTranslation(fullMessage, "es-PE");
+              }
+            } else if (completedWord) {
+              speakTranslation(completedWord, "es-PE");
+            }
+          }
+        }
+
+        if (data.kind === "sentence_correction") {
+          setAiCorrecting(false);
+
+          const correction = data.sentence_correction;
+
+          if (correction?.corrected) {
+            const correctedText = String(correction.corrected);
+            setAiSentence(correctedText);
+            setAiCorrectionError("");
+            if (autoTtsRef.current) {
+              speakTranslation(correctedText, "es-PE");
+            }
+          } else {
+            setAiCorrectionError(
+              "No se pudo generar una corrección contextual."
+            );
+          }
+        }
+
+        if (data.error) {
+          setAiCorrecting(false);
+
+          const errorMessage = String(data.error);
+
+          if (
+            errorMessage.toLowerCase().includes("modelo contextual") ||
+            errorMessage.toLowerCase().includes("torch") ||
+            errorMessage.toLowerCase().includes("transform")
+          ) {
+            setAiCorrectionError(errorMessage);
+          }
+
+          releaseFrame();
+          console.warn("Backend:", errorMessage);
+          setStatus(`Backend: ${errorMessage}`);
+        }
       } catch (error) {
-        console.error(error);
-        setStatus("No se pudo iniciar la camara");
+        console.error(
+          "Respuesta WebSocket inválida:",
+          error
+        );
       }
     };
+
+    // =====================================
+    // 2. CARGAR MEDIAPIPE
+    // =====================================
+    setStatus("Cargando detector...");
+    console.log("PASO 1: Cargando MediaPipe");
+
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm"
+    );
+
+    if (cancelled) return;
+
+    console.log(
+      "PASO 2: MediaPipe cargado correctamente"
+    );
+
+    // =====================================
+    // 3. CREAR HANDLANDMARKER
+    // =====================================
+    const landmarker =
+      await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: MODEL_URL,
+          delegate: "CPU",
+        },
+        runningMode: "VIDEO",
+        numHands: 2,
+      });
+
+    if (cancelled) {
+      landmarker.close();
+      return;
+    }
+
+    landmarkerRef.current = landmarker;
+
+    const poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: POSE_MODEL_URL,
+        delegate: "CPU",
+      },
+      runningMode: "VIDEO",
+      numPoses: 1,
+    });
+
+    if (cancelled) {
+      landmarker.close();
+      poseLandmarker.close();
+      return;
+    }
+
+    poseLandmarkerRef.current = poseLandmarker;
+
+    console.log(
+      "PASO 3: HandLandmarker + PoseLandmarker creados correctamente"
+    );
+
+    // =====================================
+    // 4. SOLICITAR ACCESO A LA CÁMARA
+    // =====================================
+    setStatus("Abriendo cámara...");
+    console.log("PASO 4: Solicitando acceso a cámara");
+
+    const newStream =
+      await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: {
+            ideal: cameraFacing,
+          },
+        },
+        audio: false,
+      });
+
+    stream = newStream;
+
+    if (cancelled) {
+      newStream.getTracks().forEach(
+        (track) => track.stop()
+      );
+      return;
+    }
+
+    streamRef.current = newStream;
+
+    // =====================================
+    // 5. IDENTIFICAR CÁMARA ACTIVA
+    // =====================================
+    const videoTrack = newStream.getVideoTracks()[0];
+
+    if (videoTrack) {
+      const settings = videoTrack.getSettings();
+
+      if (settings.deviceId) {
+        setSelectedCamera(settings.deviceId);
+      }
+
+      if (settings.facingMode === "environment") {
+        setCameraFacing("environment");
+      } else if (settings.facingMode === "user") {
+        setCameraFacing("user");
+      }
+    }
+
+    await loadCameras();
+
+    if (cancelled) return;
+
+    // =====================================
+    // 6. MOSTRAR VIDEO EN PANTALLA
+    // =====================================
+    const video = videoRef.current;
+
+    if (!video) {
+      throw new Error("No se encontró el elemento de video");
+    }
+
+    video.srcObject = newStream;
+
+    if (cancelled) return;
+
+    if (video.srcObject !== newStream) {
+      video.srcObject = newStream;
+    }
+
+    try {
+      await video.play();
+    } catch (error) {
+      if (cancelled) return;
+
+      if (
+        error instanceof DOMException &&
+        error.name === "AbortError"
+      ) {
+        console.warn(
+          "La reproducción fue interrumpida por otro cambio de cámara."
+        );
+        return;
+      }
+
+      throw error;
+    }
+
+    if (cancelled) return;
+
+    // =====================================
+    // 7. INICIAR RECONOCIMIENTO
+    // =====================================
+    console.log("PASO 5: Cámara funcionando");
+
+    setStatus("Cámara activa");
+    detectLoop();
+
+  } catch (error) {
+    if (cancelled) return;
+
+    console.error(
+      "ERROR AL INICIAR TRADUCTOR:",
+      error
+    );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : String(error);
+
+    setStatus(`Error: ${message}`);
+  }
+};
+
 
     initialize();
 
@@ -406,12 +848,76 @@ function Translator() {
       frameInFlightRef.current = false;
       wsRef.current?.close();
       landmarkerRef.current?.close();
+      poseLandmarkerRef.current?.close();
 
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
       }
     };
   }, []);
+  const changeCamera = async (
+  deviceId?: string,
+  facingMode?: "user" | "environment"
+) => {
+  try {
+    setStatus("Cambiando cámara...");
+
+    streamRef.current?.getTracks().forEach(
+      (track) => track.stop()
+    );
+
+    const videoConstraints: MediaTrackConstraints =
+      deviceId
+        ? {
+            deviceId: { exact: deviceId },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          }
+        : {
+            facingMode: {
+              ideal: facingMode ?? "user",
+            },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          };
+
+    const newStream =
+      await navigator.mediaDevices.getUserMedia({
+        video: videoConstraints,
+        audio: false,
+      });
+
+    streamRef.current = newStream;
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = newStream;
+      await videoRef.current.play();
+    }
+
+    const track = newStream.getVideoTracks()[0];
+
+    if (track) {
+      const settings = track.getSettings();
+
+      if (settings.deviceId) {
+        setSelectedCamera(settings.deviceId);
+      }
+
+      if (settings.facingMode === "environment") {
+        setCameraFacing("environment");
+      } else if (settings.facingMode === "user") {
+        setCameraFacing("user");
+      }
+    }
+
+    await loadCameras();
+
+    setStatus("Cámara activa");
+  } catch (error) {
+    console.error("Error cambiando cámara:", error);
+    setStatus("No se pudo cambiar la cámara");
+  }
+};
 
   const finalizarPalabra = () => {
     cancelWordGapTimer();
@@ -420,8 +926,23 @@ function Translator() {
 
   const elegirSugerencia = (word: string) => {
     cancelWordGapTimer();
+    setAiSentence("");
+    setAiCorrectionError("");
     sendCommand({
       mode: "choose_suggestion",
+      word,
+    });
+  };
+
+  const elegirSugerenciaDePalabra = (word: string) => {
+    if (selectedWordIndex === null) return;
+
+    setAiSentence("");
+    setAiCorrectionError("");
+
+    sendCommand({
+      mode: "replace_sentence_word",
+      index: selectedWordIndex,
       word,
     });
   };
@@ -443,6 +964,7 @@ function Translator() {
   const borrarUltimo = () => {
     cancelWordGapTimer();
     setAiSentence("");
+    setSelectedWordIndex(null);
     sendCommand({ mode: "backspace_language" });
   };
 
@@ -451,6 +973,7 @@ function Translator() {
     setManualCorrection("");
     setAiSentence("");
     setAiCorrectionError("");
+    setSelectedWordIndex(null);
     sendCommand({ mode: "clear_language" });
   };
 
@@ -492,15 +1015,95 @@ function Translator() {
             </div>
             <span className="camera-live">EN VIVO</span>
           </div>
+          <div className="camera-controls">
+  <div className="recognition-input-mode">
+    <span>Modo de reconocimiento</span>
+    <div>
+      <button
+        type="button"
+        className={recognitionInputMode === "letter" ? "active" : ""}
+        onClick={() => setRecognitionInputMode("letter")}
+      >
+        Letras
+      </button>
+      <button
+        type="button"
+        className={recognitionInputMode === "word" ? "active" : ""}
+        onClick={() => setRecognitionInputMode("word")}
+      >
+        Palabras
+      </button>
+    </div>
+  </div>
+
+  <div className="camera-selector">
+    <label htmlFor="camera-select">
+      Cámara
+    </label>
+
+    <select
+      id="camera-select"
+      value={selectedCamera}
+      onChange={(event) =>
+        changeCamera(event.target.value)
+      }
+    >
+      {cameras.map((camera, index) => (
+        <option
+          key={camera.deviceId}
+          value={camera.deviceId}
+        >
+          {camera.label ||
+            `Cámara ${index + 1}`}
+        </option>
+      ))}
+    </select>
+  </div>
+
+  <div className="mobile-camera-buttons">
+    <button
+      type="button"
+      className={
+        cameraFacing === "user" ? "active" : ""
+      }
+      onClick={() =>
+        changeCamera(undefined, "user")
+      }
+    >
+      Cámara frontal
+    </button>
+
+    <button
+      type="button"
+      className={
+        cameraFacing === "environment"
+          ? "active"
+          : ""
+      }
+      onClick={() =>
+        changeCamera(undefined, "environment")
+      }
+    >
+      Cámara trasera
+    </button>
+  </div>
+</div>
 
           <div className="translator-camera">
-            <video ref={videoRef} playsInline muted />
+            <video
+  ref={videoRef}
+  autoPlay
+  playsInline
+  muted
+/>
             <canvas ref={canvasRef} width={640} height={480} />
             <div className="camera-status">{status}</div>
           </div>
 
           <div className="camera-help">
-            Las letras se agregan automaticamente cuando la prediccion es estable.
+            {recognitionInputMode === "letter"
+              ? "Modo Letras: usa el reconocimiento estático/dinámico actual y construye palabras letra por letra."
+              : "Modo Palabras: analiza dos manos y la pose de brazos/torso durante una secuencia para reconocer una seña como palabra completa."}
           </div>
         </section>
 
@@ -510,18 +1113,26 @@ function Translator() {
               <h3>Reconocimiento</h3>
               <p>
                 Resultado de la seña detectada
-                {recognitionMode === "dynamic"
-                  ? " · Dinamica"
-                  : recognitionMode === "static"
-                    ? " · Estatica"
-                    : ""}
+                {recognitionMode === "word"
+                  ? " · Palabra completa"
+                  : recognitionMode === "dynamic"
+                    ? " · Dinámica"
+                    : recognitionMode === "static"
+                      ? " · Estática"
+                      : ""}
               </p>
             </div>
           </div>
 
           <div className="recognized-sign">
-            <span>Seña reconocida</span>
-            <strong>{letter}</strong>
+            <span>
+              {recognitionInputMode === "word"
+                ? "Palabra reconocida"
+                : "Seña reconocida"}
+            </span>
+            <strong className={recognitionInputMode === "word" ? "recognized-word" : ""}>
+              {letter}
+            </strong>
           </div>
 
           <div className="translator-confidence">
@@ -539,6 +1150,31 @@ function Translator() {
             </div>
           </div>
 
+          {recognitionInputMode === "word" && (
+            <div className="word-sequence-status">
+              <div>
+                <span>Secuencia temporal</span>
+                <strong>
+                  {Math.min(wordBuffer, 30)}/30
+                </strong>
+              </div>
+              <small>
+                Frames del gesto: {wordGestureFrames}
+              </small>
+
+              {wordCandidates.length > 0 && (
+                <div className="word-candidate-list">
+                  {wordCandidates.map((candidate) => (
+                    <span key={`${candidate.word}-${candidate.confidence}`}>
+                      {candidate.word}{" "}
+                      {(candidate.confidence * 100).toFixed(0)}%
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="language-capture-status">
             <span>Palabra interpretada</span>
             <strong>
@@ -546,13 +1182,20 @@ function Translator() {
             </strong>
           </div>
 
-          <button
-            className="translator-primary-button"
-            onClick={finalizarPalabra}
-            disabled={!language.raw_word}
-          >
-            Finalizar palabra
-          </button>
+          {recognitionInputMode === "letter" ? (
+            <button
+              className="translator-primary-button"
+              onClick={finalizarPalabra}
+              disabled={!language.raw_word}
+            >
+              Finalizar palabra
+            </button>
+          ) : (
+            <div className="word-mode-hint">
+              La palabra se agrega automáticamente cuando el gesto temporal
+              alcanza la confianza mínima del modelo.
+            </div>
+          )}
         </section>
       </div>
 
@@ -612,9 +1255,67 @@ function Translator() {
             !language.display_text ? "empty" : ""
           }`}
         >
-          {language.display_text ||
-            "La oracion corregida aparecera aqui..."}
+          {language.sentence_words.length > 0 ? (
+            <div className="sentence-word-list">
+              {language.sentence_words.map((word, index) => (
+                <button
+                  key={`${index}-${word}`}
+                  type="button"
+                  className={`sentence-word-button ${
+                    selectedWordIndex === index ? "active" : ""
+                  }`}
+                  onClick={() => setSelectedWordIndex(index)}
+                  title="Haz clic para revisar las sugerencias de esta palabra"
+                >
+                  {word}
+                </button>
+              ))}
+
+              {language.resolved_word && (
+                <span className="sentence-current-word">
+                  {language.resolved_word}
+                </span>
+              )}
+            </div>
+          ) : (
+            language.resolved_word ||
+            "La oracion corregida aparecera aqui..."
+          )}
         </div>
+
+        {selectedSentenceItem && (
+          <div className="language-suggestions selected-word-suggestions">
+            <span className="language-suggestions-label">
+              Sugerencias para: {selectedSentenceItem.word}
+              {selectedSentenceItem.raw &&
+              selectedSentenceItem.raw !== selectedSentenceItem.word
+                ? ` · reconocido: ${selectedSentenceItem.raw}`
+                : ""}
+            </span>
+
+            <div className="language-suggestion-buttons">
+              {selectedSentenceItem.suggestions.length > 0 ? (
+                selectedSentenceItem.suggestions.map((suggestion) => (
+                  <button
+                    type="button"
+                    key={`selected-${selectedSentenceItem.index}-${suggestion.word}-${suggestion.score}`}
+                    onClick={() =>
+                      elegirSugerenciaDePalabra(suggestion.word)
+                    }
+                    title={`Score ${(suggestion.score * 100).toFixed(1)}%`}
+                  >
+                    <strong>{suggestion.word}</strong>
+                    <span>{(suggestion.score * 100).toFixed(0)}%</span>
+                  </button>
+                ))
+              ) : (
+                <span className="language-no-suggestions">
+                  No hay alternativas guardadas para esta palabra.
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="language-word-grid">
           <div className="language-word-card corrected">
@@ -635,6 +1336,20 @@ function Translator() {
         {language.event?.type === "word_finalized" && (
           <div className="language-event-message">
             Palabra agregada: {String(language.event.word ?? "")}
+          </div>
+        )}
+
+        {language.event?.type === "word_sign_added" && (
+          <div className="language-event-message">
+            Seña de palabra agregada: {String(language.event.word ?? "")}
+          </div>
+        )}
+
+        {language.event?.type === "sentence_word_replaced" && (
+          <div className="language-event-message">
+            Palabra cambiada: {String(language.event.previous_word ?? "")}
+            {" → "}
+            {String(language.event.word ?? "")}
           </div>
         )}
 
@@ -710,6 +1425,47 @@ function Translator() {
 
         <div className="translator-actions">
           <button
+            type="button"
+            className={`voice-button ${autoTts ? "active" : ""}`}
+            onClick={() => setAutoTts((value) => !value)}
+            disabled={!ttsSupported}
+            title="Lee automáticamente la traducción al finalizar palabras u obtener la corrección de Qwen"
+          >
+            Lectura automática: {autoTts ? "ACTIVADA" : "DESACTIVADA"}
+            {translationSpeaking ? " · hablando" : ""}
+          </button>
+
+          {autoTts && (
+            <div className="tts-reading-mode">
+              <span>Modo de lectura</span>
+              <div>
+                <button
+                  type="button"
+                  className={
+                    autoTtsMode === "new_words" ? "active" : ""
+                  }
+                  onClick={() =>
+                    setAutoTtsModeState("new_words")
+                  }
+                >
+                  Solo nuevas
+                </button>
+                <button
+                  type="button"
+                  className={
+                    autoTtsMode === "continuous" ? "active" : ""
+                  }
+                  onClick={() =>
+                    setAutoTtsModeState("continuous")
+                  }
+                >
+                  Lectura corrida
+                </button>
+              </div>
+            </div>
+          )}
+
+          <button
             className="translator-primary-button"
             onClick={corregirOracionIA}
             disabled={
@@ -720,9 +1476,11 @@ function Translator() {
             {aiCorrecting ? "Corrigiendo con IA..." : "Corregir oración con IA"}
           </button>
 
-          <button onClick={finalizarPalabra} disabled={!language.raw_word}>
-            Finalizar palabra
-          </button>
+          {recognitionInputMode === "letter" && (
+            <button onClick={finalizarPalabra} disabled={!language.raw_word}>
+              Finalizar palabra
+            </button>
+          )}
 
           <button
             onClick={borrarUltimo}
@@ -741,9 +1499,9 @@ function Translator() {
         </div>
 
         <div className="language-help">
-          Retira la mano menos de {WORD_GAP_MS} ms para repetir una letra. Si la
-          mantienes fuera aproximadamente 1 segundo, la palabra se finaliza y se
-          corrige automaticamente.
+          {recognitionInputMode === "letter"
+            ? `Modo Letras: retira la mano brevemente para repetir una letra; una pausa cercana a ${WORD_GAP_MS} ms finaliza y corrige la palabra.`
+            : "Modo Palabras: cada gesto completo se agrega como una palabra. Las sugerencias, aprendizaje, Qwen contextual y locutor continúan usando la misma oración."}
         </div>
       </section>
 
