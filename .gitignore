@@ -357,3 +357,18 @@ backups/
 !LICENSE
 
 !.gitignore
+
+
+# ============================================================
+# AI-TRAINING / DATASETS GENERADOS LOCALMENTE
+# ============================================================
+
+# Las muestras de cámara/video son datos locales de entrenamiento.
+ai-training/word_mode/dataset/*
+!ai-training/word_mode/dataset/.gitkeep
+
+# Modelos auxiliares descargados automáticamente por word_mode.
+ai-training/word_mode/models/
+
+# Checkpoint PyTorch regenerable; el runtime usa word_model.onnx.
+ai-training/word_mode/*.pt

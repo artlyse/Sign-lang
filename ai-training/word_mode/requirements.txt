@@ -1,0 +1,5 @@
+# Se instala DENTRO DEL MISMO venv del backend.
+# No incluye torch para no reemplazar tu build CUDA (cu132) por una CPU.
+mediapipe>=1.1.0
+opencv-contrib-python>=5.0.0.93
+onnx>=1.19.0

@@ -1,10 +1,16 @@
-# Requirements 
+# Dependencias auxiliares de entrenamiento.
+# Se instalan dentro del MISMO venv del backend.
+#
+# IMPORTANTE: torch NO se incluye aquí para no reemplazar por accidente
+# una compilación CUDA ya instalada. Instala PyTorch por separado según
+# el hardware y conserva esa versión al ejecutar estos scripts.
+
 opencv-python
 mediapipe
 numpy
-torch
 scikit-learn
 onnx
 onnxruntime
 matplotlib
 seaborn
+joblib

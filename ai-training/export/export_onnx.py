@@ -132,7 +132,7 @@ def exportar_lstm():
 
 
 def copiar_extras():
-    print("\nCopiando scalers y modelo MediaPipe...")
+    print("\nCopiando scalers...")
     
     os.makedirs(BACKEND_MODELS, exist_ok=True)
     
@@ -147,11 +147,6 @@ def copiar_extras():
         os.path.join(BACKEND_MODELS, "scaler_dynamic.pkl")
     )
     print("  scaler_dynamic.pkl copiado")
-    
-    hand_model = os.path.join(AI_TRAINING, "hand_landmarker.task")
-    if os.path.exists(hand_model):
-        shutil.copy(hand_model, os.path.join(BACKEND_MODELS, "hand_landmarker.task"))
-        print("  hand_landmarker.task copiado")
 
 
 def verificar_onnx():
