@@ -1,3 +1,5 @@
+"""Dependencias FastAPI para resolver usuario obligatorio/opcional desde JWT."""
+
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status

@@ -1,3 +1,9 @@
+"""Estado lingüístico de una sesión de traducción.
+
+Convierte predicciones de letras/palabras en texto, mantiene sugerencias,
+finaliza palabras y procesa feedback explícito. Decide cuándo una sugerencia
+puede autocorregirse y conserva metadatos para editar palabras ya agregadas."""
+
 from collections import deque
 import time
 from typing import Deque, Optional
@@ -5,6 +11,7 @@ from typing import Deque, Optional
 from app.config import (
     LANGUAGE_AUTO_ACCEPT_MARGIN,
     LANGUAGE_AUTO_ACCEPT_SCORE,
+    LANGUAGE_EXACT_CORRECTION_AUTO_COUNT,
     LANGUAGE_UNKNOWN_AUTO_ACCEPT_SCORE,
     LANGUAGE_UNKNOWN_AUTO_ACCEPT_MARGIN,
     LANGUAGE_UNKNOWN_AUTO_ACCEPT_MAX_DISTANCE,
@@ -216,6 +223,104 @@ class LanguageComposerSession:
 
         return self.state()
 
+    def process_word_prediction(self, recognition_result: dict) -> dict:
+        """
+        Inserta una seña que representa una palabra o una frase corta completa.
+
+        Las etiquetas del dataset pueden usar "_" para representar espacios
+        (COMO_ESTAS, CON_PERMISO, DE_NADA). Cada token pasa por el mismo
+        corrector léxico y queda almacenado como palabra independiente para
+        sugerencias, edición y contexto.
+        """
+        self.last_event = None
+
+        if not bool(recognition_result.get("accepted", False)):
+            return self.state()
+
+        raw_label = str(recognition_result.get("word", "")).strip().upper()
+        raw_phrase = " ".join(
+            raw_label.replace("_", " ").replace("-", " ").split()
+        )
+        confidence = float(recognition_result.get("confidence", 0.0))
+        if not raw_phrase or raw_phrase == "-":
+            return self.state()
+
+        implicit_learning = None
+        if self.pending_feedback:
+            implicit_learning = self._commit_pending_implicit()
+
+        self._reset_current_word_state()
+
+        raw_tokens = [item for item in raw_phrase.split(" ") if item]
+        chosen_tokens = []
+        last_feedback = None
+        correction_details = []
+
+        for raw in raw_tokens:
+            context_before = self._context_words()
+            suggestions = language_service.suggest(
+                raw,
+                context_words=context_before,
+            )
+            resolution = self._resolve_word(raw, suggestions)
+            chosen = str(resolution.get("word") or raw).upper()
+            autocorrected = bool(resolution.get("autocorrected", False))
+            chosen_score = float(resolution.get("score", 0.0))
+            margin = float(resolution.get("margin", 0.0))
+
+            self.sentence_words.append(chosen)
+            sentence_item = {
+                "raw": raw,
+                "word": chosen,
+                "predicted": chosen,
+                "context_words": list(context_before),
+                "suggestions": [dict(item) for item in suggestions[:5]],
+                "recognition_mode": "word",
+                "recognition_confidence": round(confidence, 4),
+            }
+            self.sentence_items.append(sentence_item)
+            self.last_finalized = dict(sentence_item)
+
+            last_feedback = {
+                "raw": raw,
+                "predicted": chosen,
+                "context_words": context_before,
+                "autocorrected": autocorrected,
+                "score": round(chosen_score, 4),
+                "margin": round(margin, 4),
+                "suggestions": [
+                    item["word"] for item in suggestions[:5]
+                ],
+                "raw_is_dictionary_word": bool(
+                    resolution.get("raw_is_dictionary_word", False)
+                ),
+            }
+
+            chosen_tokens.append(chosen)
+            correction_details.append(
+                {
+                    "raw": raw,
+                    "word": chosen,
+                    "autocorrected": autocorrected,
+                }
+            )
+
+        self.pending_feedback = last_feedback
+        chosen_phrase = " ".join(chosen_tokens)
+
+        self.last_event = {
+            "type": "word_sign_added",
+            "raw": raw_phrase,
+            "word": chosen_phrase,
+            "words": list(chosen_tokens),
+            "confidence": round(confidence, 4),
+            "mode": "word",
+            "source": recognition_result.get("source", "live"),
+            "corrections": correction_details,
+            "implicit_learning": implicit_learning,
+        }
+        return self.state()
+
     def hand_absent(self) -> dict:
         self.candidate_letter = None
         self.candidate_mode = None
@@ -279,11 +384,17 @@ class LanguageComposerSession:
         best_is_completion = bool(best.get("completion", False))
         best_distance = float(best.get("distance", 99.0))
         best_similarity = float(best.get("similarity", 0.0))
+        learned_exact_count = int(best.get("learned_correction_count", 0))
 
-        # Una completacion de prefijo (HOL -> HOLA) solo se muestra como
-        # sugerencia. No se aplica sola mientras el usuario aun podria seguir.
-        normal_accept = (
+        # Una completación de prefijo (HOL -> HOLA) normalmente solo se muestra
+        # como sugerencia. Después de correcciones explícitas repetidas del
+        # MISMO usuario sí puede aplicarse al finalizar la palabra.
+        completion_allowed = (
             not best_is_completion
+            or learned_exact_count >= LANGUAGE_EXACT_CORRECTION_AUTO_COUNT
+        )
+        normal_accept = (
+            completion_allowed
             and best_score >= LANGUAGE_AUTO_ACCEPT_SCORE
             and margin >= LANGUAGE_AUTO_ACCEPT_MARGIN
         )
@@ -325,6 +436,7 @@ class LanguageComposerSession:
             "reason": reason,
             "top_suggestion": best_word,
             "raw_is_dictionary_word": raw_is_dictionary_word,
+            "learned_exact_count": learned_exact_count,
         }
 
     def finalize_word(self) -> dict:

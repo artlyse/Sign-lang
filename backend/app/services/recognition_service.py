@@ -1,3 +1,5 @@
+"""Carga y ejecuta los modelos ONNX de letras estáticas y dinámicas."""
+
 import os
 
 import joblib

@@ -1,3 +1,5 @@
+"""Primitivas de seguridad: hashing de contraseñas, JWT y refresh tokens."""
+
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone

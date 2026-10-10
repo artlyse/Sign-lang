@@ -1,3 +1,9 @@
+"""Infraestructura SQLAlchemy.
+
+Crea el engine/sesiones, habilita PRAGMA seguros para SQLite y expone
+`init_db`, `get_db`, `db_session` y `database_health`. `create_all` crea tablas
+faltantes pero no sustituye un sistema de migraciones."""
+
 from contextlib import contextmanager
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import declarative_base, sessionmaker

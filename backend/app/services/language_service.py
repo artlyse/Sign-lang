@@ -1,3 +1,9 @@
+"""Motor local de sugerencias y autocorrección.
+
+Genera candidatos con vocabulario, Hunspell, similitud ponderada, contexto y
+memoria aprendida. Calcula base_score y opcionalmente lo mezcla con el
+CandidateRanker. No llama a Qwen: opera antes del corrector contextual."""
+
 import json
 import re
 import unicodedata
@@ -17,7 +23,9 @@ from app.config import (
     LANGUAGE_BIGRAMS_PATH,
     LANGUAGE_CONFUSION_MATRIX_PATH,
     LANGUAGE_CUSTOM_WORDS_PATH,
+    LANGUAGE_EXACT_CORRECTION_BOOST,
     LANGUAGE_MAX_VOCABULARY,
+    LANGUAGE_PERSONAL_WORD_BOOST,
     LANGUAGE_PREFIX_COMPLETION_LIMIT,
     LANGUAGE_RANKER_NEGATIVE_EXAMPLES,
     LANGUAGE_SUGGESTION_LIMIT,
@@ -45,8 +53,9 @@ class LanguageService:
       - matriz manual de confusiones
 
     Aprendizaje:
+      - memoria exacta raw -> correct por usuario
       - confusiones aprendidas desde feedback confirmado
-      - bigramas/trigramas aprendidos
+      - bigramas/trigramas y frecuencia personal
       - SGDClassifier incremental para reordenar candidatos
     """
 
@@ -350,6 +359,15 @@ class LanguageService:
             raw_key,
             candidate_key,
         )
+        learned_correction = learning_service.exact_correction_score(
+            raw_key,
+            candidate_key,
+        )
+        learned_correction_count = learning_service.exact_correction_occurrences(
+            raw_key,
+            candidate_key,
+        )
+        personal_word = learning_service.personal_word_score(candidate_key)
 
         first_letter_match = 1.0 if raw_key[0] == candidate_key[0] else 0.0
         exact = 1.0 if raw_key == candidate_key else 0.0
@@ -370,6 +388,8 @@ class LanguageService:
             + (0.030 if is_dictionary_candidate else 0.0)
             + (0.015 if is_completion else 0.0)
             + 0.020 * learned_confusion
+            + LANGUAGE_EXACT_CORRECTION_BOOST * learned_correction
+            + LANGUAGE_PERSONAL_WORD_BOOST * personal_word
         )
         base_score = max(0.0, min(base_score, 1.0))
 
@@ -379,6 +399,8 @@ class LanguageService:
             "static_context": static_context,
             "learned_context": learned_context,
             "learned_confusion": learned_confusion,
+            "learned_correction": learned_correction,
+            "personal_word": personal_word,
             "first_letter_match": first_letter_match,
             "prefix_ratio": prefix_ratio,
             "suffix_ratio": suffix_ratio,
@@ -418,6 +440,9 @@ class LanguageService:
             "completion": bool(is_completion),
             "learned_context": round(float(learned_context), 4),
             "learned_confusion": round(float(learned_confusion), 4),
+            "learned_correction": round(float(learned_correction), 4),
+            "learned_correction_count": int(learned_correction_count),
+            "personal_word": round(float(personal_word), 4),
             "_features": features,
         }
 

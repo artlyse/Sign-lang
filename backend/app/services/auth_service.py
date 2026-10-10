@@ -1,3 +1,8 @@
+"""Lógica de registro, login y refresh tokens.
+
+Las contraseñas se almacenan hasheadas; los refresh tokens se persisten como
+hash y pueden rotarse/revocarse. Este servicio recibe una Session SQLAlchemy."""
+
 from datetime import datetime, timezone
 
 from sqlalchemy import or_, select

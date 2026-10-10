@@ -1,3 +1,9 @@
+"""Tablas SQL del aprendizaje adaptativo.
+
+Estas tablas son por usuario salvo los ejemplos cuyo user_id puede ser nulo.
+`UserCorrection` memoriza pares completos raw->correct; `UserConfusion` modela
+sustituciones de caracteres; bigramas/trigramas capturan contexto."""
+
 from sqlalchemy import (
     Column,
     DateTime,
@@ -25,6 +31,38 @@ class LearningEvent(Base):
     source = Column(String(40), nullable=False, default="user")
     weight = Column(Float, nullable=False, default=1.0)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+
+class UserCorrection(Base):
+    """Memoria exacta por usuario: secuencia reconocida -> corrección confirmada."""
+
+    __tablename__ = "user_corrections"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "raw_word",
+            "correct_word",
+            name="uq_user_correction",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    raw_word = Column(String(100), nullable=False, index=True)
+    correct_word = Column(String(100), nullable=False, index=True)
+    weight_sum = Column(Float, nullable=False, default=0.0)
+    occurrences = Column(Integer, nullable=False, default=0)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
 
 class UserConfusion(Base):

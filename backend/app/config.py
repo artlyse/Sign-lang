@@ -1,3 +1,9 @@
+"""Configuración central de SignLang.
+
+Agrupa rutas, umbrales de reconocimiento, aprendizaje lingüístico, modelo de
+palabras y Qwen. Los valores sensibles o ajustables deben sobrescribirse desde
+variables de entorno; este archivo conserva defaults reproducibles."""
+
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -151,6 +157,23 @@ LANGUAGE_RANKER_NEGATIVE_EXAMPLES = 5
 LANGUAGE_LEARNING_MIN_CONFUSION_COUNT = 2
 LANGUAGE_LEARNING_CONFUSION_FULL_WEIGHT = 8
 
+# Memoria exacta de correcciones por usuario.
+# Ejemplo: si el usuario corrige HOL -> HOLA, HOLA recibe un boost visible
+# la próxima vez que aparezca exactamente HOL.
+LANGUAGE_EXACT_CORRECTION_BOOST = float(
+    os.getenv("LANGUAGE_EXACT_CORRECTION_BOOST", "0.12")
+)
+# Una completación de prefijo (HOL -> HOLA) no se aplica sola la primera vez.
+# Tras este número de correcciones explícitas idénticas sí puede autocorregirse.
+LANGUAGE_EXACT_CORRECTION_AUTO_COUNT = int(
+    os.getenv("LANGUAGE_EXACT_CORRECTION_AUTO_COUNT", "2")
+)
+# Frecuencia personal: palabras que el usuario confirma con frecuencia reciben
+# un refuerzo pequeño, sin reemplazar la similitud ortográfica.
+LANGUAGE_PERSONAL_WORD_BOOST = float(
+    os.getenv("LANGUAGE_PERSONAL_WORD_BOOST", "0.025")
+)
+
 # Aprendizaje implícito: si el usuario continúa escribiendo sin corregir la
 # palabra previa, cuenta como evidencia débil. No entrena directamente el SGD.
 IMPLICIT_LEARNING_ENABLED = os.getenv("IMPLICIT_LEARNING_ENABLED", "true").lower() == "true"
@@ -159,11 +182,32 @@ IMPLICIT_LEARNING_MIN_SCORE = float(os.getenv("IMPLICIT_LEARNING_MIN_SCORE", "0.
 IMPLICIT_LEARNING_MIN_MARGIN = float(os.getenv("IMPLICIT_LEARNING_MIN_MARGIN", "0.10"))
 
 # -----------------------------------------------------------------------------
+# Reconocimiento de PALABRAS completas (dos manos + pose/brazos)
+# -----------------------------------------------------------------------------
+WORD_MODEL_PATH = str(AI_MODELS_DIR / "word_model.onnx")
+WORD_SCALER_PATH = str(AI_MODELS_DIR / "scaler_word.pkl")
+WORD_LABELS_PATH = str(AI_MODELS_DIR / "word_labels.json")
+
+# Debe coincidir exactamente con frontend/src/services/wordVision.ts y con
+# ai-training/word_mode/feature_extractor.py.
+WORD_INPUT_FEATURES = 192
+WORD_SEQUENCE_FRAMES = int(os.getenv("WORD_SEQUENCE_FRAMES", "30"))
+WORD_SAMPLE_FPS = int(os.getenv("WORD_SAMPLE_FPS", "15"))
+WORD_EVAL_STRIDE = int(os.getenv("WORD_EVAL_STRIDE", "4"))
+WORD_MIN_CONFIDENCE = float(os.getenv("WORD_MIN_CONFIDENCE", "0.78"))
+WORD_STABLE_CONFIRMATIONS = int(os.getenv("WORD_STABLE_CONFIRMATIONS", "2"))
+# Si el usuario termina la seña antes de obtener dos confirmaciones en vivo,
+# evaluamos toda la secuencia al desaparecer las manos.
+WORD_MIN_GESTURE_FRAMES = int(os.getenv("WORD_MIN_GESTURE_FRAMES", "12"))
+WORD_MAX_GESTURE_FRAMES = int(os.getenv("WORD_MAX_GESTURE_FRAMES", "90"))
+
+# -----------------------------------------------------------------------------
 # Corrector contextual de oraciones - Qwen local
 # -----------------------------------------------------------------------------
+# Se conserva en este archivo para que instalar el modo Palabra no elimine la
+# configuración del corrector contextual existente.
 SENTENCE_AI_ENABLED = os.getenv("SENTENCE_AI_ENABLED", "true").lower() == "true"
 SENTENCE_AI_MODEL_ID = os.getenv("SENTENCE_AI_MODEL_ID", "Qwen/Qwen3-0.6B")
-
 SENTENCE_AI_LOCAL_DIR = os.getenv(
     "SENTENCE_AI_LOCAL_DIR",
     str(DATA_DIR / "models" / "qwen3-0.6b"),

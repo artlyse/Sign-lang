@@ -1,3 +1,5 @@
+"""Endpoints REST de diagnóstico para reconocimiento estático/dinámico."""
+
 # Rutas de reconocimiento
 from fastapi import APIRouter, HTTPException
 

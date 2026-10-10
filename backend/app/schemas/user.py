@@ -1,3 +1,5 @@
+"""Esquemas Pydantic del perfil de usuario."""
+
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
