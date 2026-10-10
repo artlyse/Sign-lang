@@ -54,3 +54,7 @@ textarea {
 button {
   cursor: pointer;
 }
+
+html[data-theme="dark"] body {
+  background: #0b1018;
+}

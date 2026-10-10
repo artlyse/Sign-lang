@@ -1,6 +1,7 @@
 type Page =
   | "dashboard"
   | "translator"
+  | "practice"
   | "templates"
   | "statistics"
   | "help"
@@ -11,6 +12,9 @@ interface SidebarProps {
   onNavigate: (page: Page) => void;
   open: boolean;
   onClose: () => void;
+  onLogout: () => void;
+  username: string;
+  displayName: string;
 }
 
 function Sidebar({
@@ -18,6 +22,9 @@ function Sidebar({
   onNavigate,
   open,
   onClose,
+  onLogout,
+  username,
+  displayName,
 }: SidebarProps) {
   const navigate = (page: Page) => {
     onNavigate(page);
@@ -27,6 +34,20 @@ function Sidebar({
       onClose();
     }
   };
+
+  // Usamos el nombre visible para generar las iniciales.
+  // Si no existe, usamos el username.
+  const nameForInitials = displayName || username;
+
+  const initials = nameForInitials
+    ? nameForInitials
+        .trim()
+        .split(/\s+/)
+        .map((word) => word.charAt(0))
+        .slice(0, 2)
+        .join("")
+        .toUpperCase()
+    : "US";
 
   return (
     <>
@@ -38,6 +59,7 @@ function Sidebar({
       )}
 
       <aside className={`sidebar ${open ? "open" : ""}`}>
+        {/* LOGO */}
         <div className="sidebar-brand">
           <div className="brand-icon"></div>
 
@@ -47,6 +69,7 @@ function Sidebar({
           </div>
         </div>
 
+        {/* MENÚ */}
         <nav className="sidebar-menu">
           <button
             className={
@@ -64,8 +87,18 @@ function Sidebar({
             }
             onClick={() => navigate("translator")}
           >
-            <span></span>
+            <span>✋</span>
             Traductor
+          </button>
+
+          <button
+            className={
+              currentPage === "practice" ? "active" : ""
+            }
+            onClick={() => navigate("practice")}
+          >
+            <span>◎</span>
+            Práctica
           </button>
 
           <button
@@ -111,13 +144,29 @@ function Sidebar({
           </button>
         </nav>
 
+        {/* USUARIO */}
         <div className="sidebar-user">
-          <div className="user-avatar">OP</div>
-
-          <div>
-            <strong>Personal de atención</strong>
-            <span>Operador</span>
+          <div className="user-avatar">
+            {initials}
           </div>
+
+          <div className="sidebar-user-info">
+            <strong>
+              {displayName || username || "Usuario"}
+            </strong>
+
+            <span>{username || "Operador"}</span>
+          </div>
+
+          <button
+            type="button"
+            className="sidebar-logout"
+            onClick={onLogout}
+            title="Cerrar sesión"
+            aria-label="Cerrar sesión"
+          >
+            ↪
+          </button>
         </div>
       </aside>
     </>
