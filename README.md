@@ -228,12 +228,6 @@ Actualmente SignLang dispone de:
 
 # Arquitectura general
 
-<div align="center">
-<img width="1024" height="1536" alt="Arquitectura de reconocimiento de señas y corrección textual" src="https://github.com/user-attachments/assets/6d037e88-a6cb-40ec-9c85-13ed9277ac65" />
-</div>
-
-Arquitectura de lógica:
-
 <img width="1180" height="1420" alt="flujo_completo_reconocimiento_minimalista" src="https://github.com/user-attachments/assets/0c894f13-0f73-4a8c-b668-a00f93f40c0e" />
 
 ---
