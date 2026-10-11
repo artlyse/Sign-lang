@@ -1568,62 +1568,7 @@ Ejemplo conceptual:
 
 # Estructura del proyecto
 
-<div align="center">
-<img width="1312" height="1199" alt="Estructura del proyecto en VS Code" src="https://github.com/user-attachments/assets/078fc453-957f-43c8-9f1f-7d124e1269fd" />
-</div>
-
-
-```text
-Sign-lang/
-│
-├── ai-training/
-│   ├── export/
-│   ├── training/
-│   ├── capture_dataset.py
-│   ├── capture_dynamic.py
-│   ├── verificar_dataset.py
-│   │
-│   └── word_mode/
-│       ├── collect_camera.py
-│       ├── import_video.py
-│       ├── feature_extractor.py
-│       ├── dataset_utils.py
-│       ├── train_word_model.py
-│       ├── export_word_model.py
-│       ├── menu.py
-│       ├── models/
-│       └── dataset/
-│
-├── backend/
-│   ├── app/
-│   │   ├── ai/
-│   │   ├── api/
-│   │   ├── core/
-│   │   ├── models/
-│   │   ├── schemas/
-│   │   ├── services/
-│   │   └── websocket/
-│   │
-│   ├── data/
-│   ├── scripts/
-│   └── requirements.txt
-│
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── hooks/
-│   │   ├── pages/
-│   │   └── services/
-│   │
-│   ├── package.json
-│   └── vite.config.ts
-│
-├── docs/
-│   └── technical/
-│
-└── README.md
-```
+<img width="1536" height="1024" alt="Estructura del proyecto Sign-lang" src="https://github.com/user-attachments/assets/4cf78422-7dda-4233-a789-bffb9ab5b59e" />
 
 ---
 
