@@ -56,6 +56,7 @@
 - [Voz y accesibilidad](#voz-y-accesibilidad)
 - [Tecnologías y versiones](#tecnologías-y-versiones)
 - [Modelos utilizados](#modelos-utilizados)
+- [Descargas](#descargas)
 - [Base de datos](#base-de-datos)
 - [API](#api)
 - [WebSocket](#websocket)
@@ -1226,6 +1227,116 @@ backend/data/models/qwen3-0.6b/
 
 ---
 
+
+---
+
+# Descargas
+
+Los modelos y recursos preentrenados necesarios para el funcionamiento de **SignLang** pueden descargarse desde el repositorio externo del proyecto.
+
+<div align="center">
+
+| Recurso | Descripción | Ubicación destino | Enlace |
+|:-------:|:------------|:-----------------:|:------:|
+| 🧠 **Modelos preentrenados** | Modelos ONNX, scalers y archivos auxiliares de reconocimiento disponibles del proyecto | `backend/app/ai/models/` | [⬇️ Descargar](https://www.mediafire.com/folder/cr8w810hmx6fe/Models) |
+
+</div>
+
+## Archivos esperados
+
+Después de descargar los modelos, la carpeta principal debería contener los archivos necesarios para los modos habilitados en la aplicación:
+
+```text
+backend/app/ai/models/
+├── gesture_model.onnx
+├── gesture_model.onnx.data
+├── lstm_model.onnx
+├── lstm_model.onnx.data
+├── word_model.onnx
+├── scaler_static.pkl
+├── scaler_dynamic.pkl
+├── scaler_word.pkl
+└── word_labels.json
+```
+
+### Modelos de letras
+
+```text
+gesture_model.onnx
+gesture_model.onnx.data
+scaler_static.pkl
+```
+
+Se utilizan para el reconocimiento de señas estáticas.
+
+```text
+lstm_model.onnx
+lstm_model.onnx.data
+scaler_dynamic.pkl
+```
+
+Se utilizan para el reconocimiento de letras dinámicas, principalmente:
+
+```text
+J
+Ñ
+Z
+```
+
+### Modelo de palabras completas
+
+```text
+word_model.onnx
+scaler_word.pkl
+word_labels.json
+```
+
+Se utiliza en el **Modo Palabras** para reconocer una seña dinámica completa como:
+
+```text
+HOLA
+HIJO
+GRACIAS
+COMO ESTAS
+...
+```
+
+> **Importante:** los archivos deben conservar exactamente los nombres que espera el Backend. Si falta `word_model.onnx`, `scaler_word.pkl` o `word_labels.json`, el modo de palabras completas aparecerá como modelo no disponible hasta que se entrene o se copie el modelo correspondiente.
+
+## Recursos de MediaPipe
+
+El frontend necesita además:
+
+```text
+frontend/public/hand_landmarker.task
+```
+
+El modo Palabras utiliza también **Pose Landmarker** para incorporar hombros, codos, muñecas y referencias del torso. Dependiendo de la configuración, este recurso puede utilizarse localmente o mediante la URL configurada en:
+
+```env
+VITE_POSE_MODEL_URL=
+```
+
+## Modelo contextual Qwen
+
+Qwen no se distribuye junto con los modelos ONNX.
+
+Se descarga desde el Backend mediante:
+
+```powershell
+cd backend
+venv\Scripts\activate
+python -m scripts.download_qwen_model
+```
+
+y se almacena en:
+
+```text
+backend/data/models/qwen3-0.6b/
+```
+
+---
+
 # Base de datos
 
 SignLang utiliza:
@@ -2045,58 +2156,7 @@ si alguno falta.
 
 # Flujo técnico final
 
-<div align="center">
-<img width="720" height="1600" alt="Flujo técnico animado de SignLang" src="https://github.com/user-attachments/assets/b4377a11-521c-4201-bd55-1a1dee6ffa4e" />
-</div>
-
-> El diagrama visual anterior corresponde al flujo general del proyecto. A continuación se muestra el flujo técnico actualizado, incluyendo el nuevo modo de reconocimiento de palabras completas.
-
-
-```text
-                              CÁMARA
-                                │
-                     ┌──────────┴──────────┐
-                     │                     │
-                     ▼                     ▼
-                MODO LETRA           MODO PALABRA
-                     │                     │
-                     ▼                     ▼
-              Hand Landmarker       Hands + Pose
-                     │                     │
-              ┌──────┴──────┐              │
-              ▼             ▼              ▼
-             MLP           LSTM       30 × 192
-          ESTÁTICO       DINÁMICO          │
-              │           J/Ñ/Z            ▼
-              └──────┬──────┘        LSTM PALABRAS
-                     │                     │
-                     └──────────┬──────────┘
-                                ▼
-                         TEXTO RECONOCIDO
-                                │
-                                ▼
-                  ┌──────────────────────────┐
-                  │ CORRECTOR LINGÜÍSTICO    │
-                  │                          │
-                  │ Hunspell                 │
-                  │ wordfreq                 │
-                  │ RapidFuzz                │
-                  │ Levenshtein              │
-                  │ matriz de confusión      │
-                  │ bigramas / trigramas     │
-                  │ memoria del usuario      │
-                  │ SGDClassifier            │
-                  └────────────┬─────────────┘
-                               ▼
-                         ORACIÓN BASE
-                               │
-                               ▼
-                          Qwen3-0.6B
-                               │
-                     ┌─────────┴─────────┐
-                     ▼                   ▼
-                  TEXTO                 VOZ
-```
+<img width="1100" height="1500" alt="flujo_completo_corrector_qwen_animado" src="https://github.com/user-attachments/assets/d1caab43-303b-4194-a839-051dc1820bde" />
 
 ---
 
@@ -2155,7 +2215,15 @@ Proyecto desarrollado como propuesta de **Traductor Inteligente de Lengua de Se�
 
 # Historial de diseño
 
-## Diseño del Sistema — Versión inicial
+# Diseño del sistema 0.2
+
+<div align="center">
+<img width="1898" height="1079" alt="Diseño del sistema SignLang" src="https://github.com/user-attachments/assets/bd5a07b2-6d37-4c59-8c83-a35cde2ee86e" />
+</div>
+
+---
+
+## Diseño del Sistema — Versión inicial 0.1
 
 <div align="center">
 <img src="https://github.com/user-attachments/assets/22325a3e-60a8-4b85-b603-4451089098ac" alt="Diseño inicial de SignLang" width="820"/>
