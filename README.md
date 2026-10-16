@@ -2158,7 +2158,7 @@ Proyecto desarrollado como propuesta de **Traductor Inteligente de Lengua de Se�
 ---
 
 
-# Historial de diseño
+# Historial de diseño.
 
 # Diseño del sistema 0.2
 
