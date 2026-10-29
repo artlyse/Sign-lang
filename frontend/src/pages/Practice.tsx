@@ -781,6 +781,27 @@ function Practice() {
             {loadingChallenge ? "Generando..." : target || "-"}
           </div>
 
+          {mode === "letter" && target && !loadingChallenge && (
+            <div className="practice-sign-example">
+              <h4>¿Cómo realizar esta seña?</h4>
+
+              <img
+                key={target}
+                src={`/images/lsp/${target.trim().toUpperCase()}.png`}
+                alt={`Ejemplo de la seña de la letra ${target} en LSP`}
+                className="practice-sign-image"
+                onError={(event) => {
+                  event.currentTarget.style.display = "none";
+                }}
+              />
+
+              <p>
+                Observa la posición de la mano y realiza
+                la letra {target} frente a la cámara.
+              </p>
+            </div>
+          )}
+
           <div className="practice-target-meta">
             {mode === "phrase" && (
               <span>

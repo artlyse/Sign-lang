@@ -3457,3 +3457,35 @@ html[data-theme="dark"] .tts-reading-mode button.active {
   border-color: #22c55e;
   color: #86efac;
 }
+.practice-sign-example {
+  margin-top: 20px;
+  padding: 18px;
+  background: #f0faf7;
+  border: 1px solid #bce7dd;
+  border-radius: 16px;
+  text-align: center;
+}
+
+.practice-sign-example h4 {
+  margin: 0 0 14px;
+  color: #123c36;
+  font-size: 16px;
+}
+
+.practice-sign-image {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  height: 200px;
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: 12px;
+  background: white;
+}
+
+.practice-sign-example p {
+  margin: 12px 0 0;
+  color: #4b6862;
+  font-size: 13px;
+  line-height: 1.5;
+}
