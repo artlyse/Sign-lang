@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 
 import Sidebar from "./components/Sidebar";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Header from "./components/Header";
 
 import Dashboard from "./pages/Dashboard";
@@ -27,9 +28,10 @@ import {
   clearAuth,
 } from "./services/auth";
 
-import { applyStoredTheme } from "./services/preferences";
+import { applyStoredTheme, pullPreferences } from "./services/preferences";
 
 import "./App.css";
+import "./styles/ui-refresh.css";
 
 type Page =
   | "dashboard"
@@ -94,6 +96,11 @@ useEffect(() => {
 
       setUsername(user.username);
       setDisplayName(profile.display_name ?? "");
+
+      // Preferencias guardadas en el backend (tema, voz, landmarks...).
+      pullPreferences().catch((error) =>
+        console.warn("No se pudieron sincronizar preferencias:", error),
+      );
     } catch (error) {
       console.error(
         "Error obteniendo usuario:",
@@ -167,7 +174,12 @@ useEffect(() => {
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard":
-        return <Dashboard />;
+        return (
+          <Dashboard
+            displayName={displayName || username}
+            onNavigate={setCurrentPage}
+          />
+        );
 
       case "translator":
         return <Translator />;
@@ -176,7 +188,7 @@ useEffect(() => {
         return <Practice />;
 
       case "templates":
-        return <Templates />;
+        return <Templates onOpenTranslator={() => setCurrentPage("translator")} />;
 
       case "statistics":
         return <Statistics />;
@@ -197,6 +209,7 @@ useEffect(() => {
   };
 
   return (
+    <ErrorBoundary resetKey={`auth-${isAuthenticated}`}>
     <div className="app-layout">
         <Sidebar
           currentPage={currentPage}
@@ -220,10 +233,13 @@ useEffect(() => {
         />
 
         <main className="main-content">
-          {renderPage()}
+          <ErrorBoundary resetKey={currentPage}>
+            {renderPage()}
+          </ErrorBoundary>
         </main>
       </div>
     </div>
+    </ErrorBoundary>
   );
 }
 

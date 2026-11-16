@@ -70,6 +70,15 @@ def init_db() -> None:
     import app.models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    # Migración de columnas para bases existentes (SQLite/PostgreSQL).
+    from sqlalchemy import inspect
+    columns = {column["name"] for column in inspect(engine).get_columns("face_enrollments")}
+    blob_type = "BLOB" if IS_SQLITE else "BYTEA"
+    with engine.begin() as connection:
+        if "image_data" not in columns:
+            connection.exec_driver_sql(f"ALTER TABLE face_enrollments ADD COLUMN image_data {blob_type}")
+        if "embedding_json" not in columns:
+            connection.exec_driver_sql("ALTER TABLE face_enrollments ADD COLUMN embedding_json TEXT")
 
 
 def database_health() -> dict:

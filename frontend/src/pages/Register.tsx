@@ -1,6 +1,19 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import {
+  AlertCircle,
+  AtSign,
+  Eye,
+  EyeOff,
+  Loader2,
+  Lock,
+  Mail,
+  ShieldCheck,
+  User,
+  UserPlus,
+} from "lucide-react";
 import { registerAccount } from "../services/auth";
+import AuthShowcase from "../components/AuthShowcase";
 
 interface RegisterProps {
   onRegistered: () => void;
@@ -17,6 +30,7 @@ export default function Register({
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -59,80 +73,104 @@ export default function Register({
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <div className="auth-brand">
-          <div className="auth-logo">SL</div>
-          <h1>Sign Language</h1>
-          <p>Traductor Inteligente de Lengua de Señas Peruana</p>
-        </div>
+        <AuthShowcase />
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <div>
-            <h2>Crear cuenta</h2>
+                        <h2>Crear cuenta</h2>
             <p className="auth-subtitle">
               Regístrate para utilizar el sistema
             </p>
           </div>
 
-          {error && <div className="auth-error">{error}</div>}
+          {error && (
+            <div className="auth-error">
+              <AlertCircle size={16} />
+              {error}
+            </div>
+          )}
 
           <label>
             Nombre
-            <input
-              type="text"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Nombre completo"
-              maxLength={100}
-            />
+            <div className="auth-input">
+              <User size={18} />
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Nombre completo"
+                maxLength={100}
+              />
+            </div>
           </label>
 
           <label>
             Usuario
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Ej. geremias"
-              minLength={3}
-              maxLength={50}
-              required
-            />
+            <div className="auth-input">
+              <AtSign size={18} />
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Ej. geremias"
+                minLength={3}
+                maxLength={50}
+                required
+              />
+            </div>
           </label>
 
           <label>
             Correo electrónico
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="correo@ejemplo.com"
-              required
-            />
+            <div className="auth-input">
+              <Mail size={18} />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="correo@ejemplo.com"
+                required
+              />
+            </div>
           </label>
 
           <label>
             Contraseña
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Mínimo 8 caracteres"
-              minLength={8}
-              maxLength={128}
-              required
-            />
+            <div className="auth-input">
+              <Lock size={18} />
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Mínimo 8 caracteres"
+                minLength={8}
+                maxLength={128}
+                required
+              />
+              <button
+                type="button"
+                className="auth-eye"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </label>
 
           <label>
             Confirmar contraseña
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Repite tu contraseña"
-              minLength={8}
-              required
-            />
+            <div className="auth-input">
+              <ShieldCheck size={18} />
+              <input
+                type={showPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repite tu contraseña"
+                minLength={8}
+                required
+              />
+            </div>
           </label>
 
           <button
@@ -140,7 +178,15 @@ export default function Register({
             type="submit"
             disabled={loading}
           >
-            {loading ? "Creando cuenta..." : "Crear cuenta"}
+            {loading ? (
+              <>
+                <Loader2 size={18} className="spin" /> Creando cuenta...
+              </>
+            ) : (
+              <>
+                <UserPlus size={18} /> Crear cuenta
+              </>
+            )}
           </button>
 
           <p className="auth-switch">

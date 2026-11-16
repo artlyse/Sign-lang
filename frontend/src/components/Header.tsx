@@ -1,3 +1,5 @@
+import { Menu } from "lucide-react";
+
 interface HeaderProps {
   title: string;
   onMenuClick: () => void;
@@ -24,7 +26,7 @@ function Header({
           onClick={onMenuClick}
           aria-label="Abrir menú"
         >
-          ☰
+          <Menu size={20} />
         </button>
 
         <div>

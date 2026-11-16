@@ -46,7 +46,7 @@ def _csv_env(name: str, default: str):
 
 CORS_ORIGINS = _csv_env(
     "CORS_ORIGINS",
-    "http://localhost:5173,http://localhost:3000",
+    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000",
 )
 
 # -----------------------------------------------------------------------------
@@ -220,3 +220,32 @@ SENTENCE_AI_MAX_NEW_TOKENS = int(os.getenv("SENTENCE_AI_MAX_NEW_TOKENS", "96"))
 SENTENCE_AI_MAX_INPUT_CHARS = int(os.getenv("SENTENCE_AI_MAX_INPUT_CHARS", "600"))
 SENTENCE_AI_MIN_WORDS = int(os.getenv("SENTENCE_AI_MIN_WORDS", "2"))
 SENTENCE_AI_USE_GPU = os.getenv("SENTENCE_AI_USE_GPU", "true").lower() == "true"
+
+# -----------------------------------------------------------------------------
+# Datos de entrenamiento aportados en Práctica / modelo personal
+# -----------------------------------------------------------------------------
+# Carpeta del dataset usado por ai-training/training/*.py
+TRAINING_DATASET_DIR = Path(
+    os.getenv("TRAINING_DATASET_DIR", str(BACKEND_DIR.parent / "ai-training" / "dataset"))
+)
+# Muestras verificadas mínimas por letra para que el modelo personal influya.
+PERSONAL_MIN_SAMPLES_PER_LABEL = int(os.getenv("PERSONAL_MIN_SAMPLES_PER_LABEL", "3"))
+# Peso máximo del modelo personal frente al modelo base (0-1).
+PERSONAL_MAX_WEIGHT = float(os.getenv("PERSONAL_MAX_WEIGHT", "0.55"))
+# Vecinos usados por el k-NN personal.
+PERSONAL_KNN_K = int(os.getenv("PERSONAL_KNN_K", "7"))
+# Distancia (landmarks normalizados) a partir de la cual la muestra se ignora.
+PERSONAL_MAX_DISTANCE = float(os.getenv("PERSONAL_MAX_DISTANCE", "0.9"))
+
+
+# -----------------------------------------------------------------------------
+# Reconocimiento con ambas manos
+# -----------------------------------------------------------------------------
+# El dataset se capturó con la imagen volteada (modo selfie), así que el modelo
+# conoce una sola "mano". Con HAND_MIRROR_AUTO se prueba también la versión
+# espejada de los landmarks y se decide por votación de los últimos cuadros.
+HAND_MIRROR_AUTO = os.getenv("HAND_MIRROR_AUTO", "true").lower() in {"1", "true", "yes", "si", "sí"}
+HAND_ORIENTATION_WINDOW = int(os.getenv("HAND_ORIENTATION_WINDOW", "24"))
+# Votos mínimos y mayoría necesaria para cambiar de orientación.
+HAND_ORIENTATION_MIN_VOTES = int(os.getenv("HAND_ORIENTATION_MIN_VOTES", "6"))
+HAND_ORIENTATION_SWITCH = float(os.getenv("HAND_ORIENTATION_SWITCH", "0.75"))

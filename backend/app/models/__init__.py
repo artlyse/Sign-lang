@@ -4,6 +4,8 @@ from app.models.refresh_token import RefreshToken
 from app.models.session import Session
 from app.models.prediction import Prediction
 from app.models.practice import PracticeAttempt, PracticeProgress
+from app.models.training import TrainingSample, UserPreference, UserTemplate
+from app.models.community import FaceEnrollment, GestureSample, PhraseTemplate
 from app.models.learning import (
     LearningEvent,
     UserCorrection,
@@ -29,4 +31,10 @@ __all__ = [
     "RankerTrainingExample",
     "PracticeAttempt",
     "PracticeProgress",
+    "TrainingSample",
+    "UserTemplate",
+    "UserPreference",
+    "PhraseTemplate",
+    "GestureSample",
+    "FaceEnrollment",
 ]

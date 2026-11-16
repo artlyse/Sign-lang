@@ -1,0 +1,226 @@
+/* ========================================================= */
+/* PLANTILLAS — paquetes de frases                            */
+/* ========================================================= */
+
+.templates-scope {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.templates-scope button {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.templates-scope button.active {
+  background: var(--surface);
+  color: var(--brand);
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.12);
+}
+
+.pack-card {
+  gap: 10px;
+}
+
+.pack-card:hover {
+  transform: none;
+}
+
+.pack-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pack-owner.mine {
+  background: var(--green-bg);
+  color: var(--green-fg);
+}
+
+.template-card p.pack-description {
+  flex: none;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pack-phrases {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pack-phrases li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px 2px 2px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.pack-phrases li.selected {
+  border-color: var(--tone-fg);
+  background: var(--tone-bg);
+}
+
+/* anula la regla antigua `.template-card button` (botón azul de ancho completo) */
+.template-card.pack-card .pack-phrases button {
+  width: auto;
+  margin: 0;
+  font-weight: 500;
+}
+
+.template-card.pack-card .pack-phrase-text {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.template-card.pack-card .pack-phrase-icon {
+  padding: 0;
+}
+
+.template-card.pack-card .pack-phrase-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.template-card.pack-card .pack-phrase-icon:hover {
+  background: var(--surface);
+  color: var(--tone-fg);
+}
+
+.template-card.pack-card .pack-phrase-icon.done {
+  color: var(--green-fg);
+}
+
+.pack-triggers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pack-triggers i {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--tone-bg);
+  color: var(--tone-fg);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.template-form label small {
+  font-weight: 500;
+}
+
+.template-form select {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.template-form label.template-form-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.template-form-check input {
+  width: 17px;
+  height: 17px;
+  padding: 0;
+}
+
+.template-card.pack-card.active {
+  border-color: var(--tone-fg);
+  box-shadow: 0 0 0 2px var(--tone-bg), var(--shadow-md);
+}
+
+.template-card.pack-card .pack-activate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--tone-fg);
+  border-radius: 11px;
+  background: transparent;
+  color: var(--tone-fg);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.template-card.pack-card .pack-activate.on {
+  border-color: transparent;
+  background: var(--tone-fg);
+  color: #fff;
+}
+
+.pack-name-token {
+  padding: 0 5px;
+  border-radius: 6px;
+  background: var(--tone-bg);
+  color: var(--tone-fg);
+  font-weight: 700;
+}
+
+.templates-heading code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  font-size: 12.5px;
+}

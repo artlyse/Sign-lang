@@ -9,6 +9,18 @@ DATASET_PATH = os.path.join(SCRIPT_DIR, "..", "dataset", "static")
 OUTPUT_PATH = os.path.join(SCRIPT_DIR, "..", "processed")
 
 
+def normalizar_landmark(landmarks):
+    """Misma normalizacion que backend/app/services/recognition_service.py:
+    puntos relativos a la muneca y escalados por la distancia maxima.
+    Es idempotente, asi que no importa si la muestra ya venia normalizada."""
+    pts = np.asarray(landmarks, dtype=np.float32).reshape(21, 3)
+    pts = pts - pts[0]
+    max_dist = np.max(np.linalg.norm(pts, axis=1))
+    if max_dist > 0:
+        pts = pts / max_dist
+    return pts.flatten()
+
+
 def main():
     os.makedirs(OUTPUT_PATH, exist_ok=True)
     
@@ -24,7 +36,7 @@ def main():
             if archivo.endswith('.npy'):
                 data = np.load(os.path.join(letra_path, archivo))
                 if len(data) == 63:
-                    X.append(data)
+                    X.append(normalizar_landmark(data))
                     y.append(idx)
     
     X = np.array(X)

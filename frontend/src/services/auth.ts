@@ -18,6 +18,47 @@ const saveTokens = (tokens: AuthTokens) => {
   localStorage.setItem(REFRESH_KEY, tokens.refresh_token);
 };
 
+const FIELD_LABELS: Record<string, string> = {
+  email: "Correo electrónico",
+  password: "Contraseña",
+  username: "Usuario",
+  login: "Usuario o correo",
+  display_name: "Nombre",
+};
+
+type ValidationItem = {
+  loc?: (string | number)[];
+  msg?: string;
+  type?: string;
+  ctx?: { min_length?: number; max_length?: number };
+};
+
+/** Convierte la respuesta de error de FastAPI en un mensaje legible en español. */
+export async function readApiError(response: Response, fallback: string): Promise<string> {
+  const body = await response.json().catch(() => null);
+  const detail = body?.detail;
+
+  if (typeof detail === "string" && detail.trim()) return detail;
+
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail
+      .map((item: ValidationItem) => {
+        const field = String(item.loc?.[item.loc.length - 1] ?? "");
+        const label = FIELD_LABELS[field] ?? field;
+        if (field === "email") return "El correo electrónico no es válido";
+        if (item.type === "string_too_short" && item.ctx?.min_length)
+          return `${label}: mínimo ${item.ctx.min_length} caracteres`;
+        if (item.type === "string_too_long" && item.ctx?.max_length)
+          return `${label}: máximo ${item.ctx.max_length} caracteres`;
+        if (item.type === "missing") return `${label}: es obligatorio`;
+        return label ? `${label}: ${item.msg ?? "valor no válido"}` : item.msg ?? fallback;
+      })
+      .join(". ");
+  }
+
+  return response.status >= 500 ? `${fallback} (error del servidor)` : fallback;
+}
+
 export const getAccessToken = () => localStorage.getItem(ACCESS_KEY);
 export const getRefreshToken = () => localStorage.getItem(REFRESH_KEY);
 
@@ -32,7 +73,7 @@ export async function registerAccount(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error((await response.json()).detail ?? "Error de registro");
+  if (!response.ok) throw new Error(await readApiError(response, "No se pudo crear la cuenta"));
   const tokens: AuthTokens = await response.json();
   saveTokens(tokens);
   return tokens;
@@ -44,7 +85,7 @@ export async function loginAccount(login: string, password: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ login, password }),
   });
-  if (!response.ok) throw new Error((await response.json()).detail ?? "Error de acceso");
+  if (!response.ok) throw new Error(await readApiError(response, "Usuario o contraseña incorrectos"));
   const tokens: AuthTokens = await response.json();
   saveTokens(tokens);
   return tokens;

@@ -4,13 +4,43 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  Camera,
+  CaseSensitive,
+  CircleAlert,
+  Eraser,
+  Info,
+  Loader2,
+  MessageSquareText,
+  Mic,
+  MicOff,
+  SlidersHorizontal,
+  Sparkles,
+  SwitchCamera,
+  Trash2,
+  Undo2,
+  UserCheck,
+  UserRound,
+  RotateCcw,
+  Send,
+  ScanFace,
+  LayoutTemplate,
+  Volume2,
+  VolumeX,
+  WholeWord,
+} from "lucide-react";
+import "../styles/translator-workspace.css";
+import { captureFrame, getFaceStatus, verifyFace } from "../services/face";
+import { listTemplates, suggestPhrases } from "../services/templates";
+import type { Template } from "../services/templates";
+import { API_URL, getUserProfile } from "../services/auth";
+import { getActiveTemplateId, setActiveTemplateId } from "../services/preferences";
+import {
   FilesetResolver,
   HandLandmarker,
   PoseLandmarker,
 } from "@mediapipe/tasks-vision";
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
 import useTextToSpeech from "../hooks/useTextToSpeech";
-import { API_URL } from "../services/auth";
 import {
   getAutoTtsEnabled,
   getAutoTtsMode,
@@ -164,6 +194,109 @@ type WordCandidate = {
   confidence: number;
 };
 
+type ChatMessage = {
+  id: number;
+  from: "user" | "staff";
+  text: string;
+  original?: string;
+  time: string;
+};
+
+const QUESTION_WORDS: Record<string, string> = {
+  como: "cómo",
+  que: "qué",
+  donde: "dónde",
+  adonde: "adónde",
+  cuanto: "cuánto",
+  cuanta: "cuánta",
+  cuantos: "cuántos",
+  cuantas: "cuántas",
+  cual: "cuál",
+  cuales: "cuáles",
+  quien: "quién",
+  quienes: "quiénes",
+  cuando: "cuándo",
+};
+
+// Verbos de pregunta sin palabra interrogativa: "¿puedes ayudarme?"
+const QUESTION_VERBS = ["puedes", "puede", "tienes", "tiene", "hay", "sabes", "sabe", "quieres", "quiere"];
+
+const GREETINGS = [
+  ["buenos", "dias"],
+  ["buenas", "tardes"],
+  ["buenas", "noches"],
+  ["hola"],
+  ["gracias"],
+];
+
+const stripAccents = (value: string) =>
+  value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
+
+/** Ordena una parte de la oración: tildes interrogativas, ¿?, punto final. */
+function formatClause(tokens: string[]) {
+  if (tokens.length === 0) return "";
+  const plain = tokens.map(stripAccents);
+  const qIndex = plain.findIndex((w) => w in QUESTION_WORDS);
+  const isQuestion =
+    (qIndex >= 0 && qIndex <= 1) || QUESTION_VERBS.includes(plain[0]);
+
+  const words = tokens.map((word, i) => {
+    if (!isQuestion) return word;
+    if (i === qIndex) return QUESTION_WORDS[plain[i]];
+    // "cómo estas" -> "cómo estás", "dónde esta" -> "dónde está"
+    if (i === qIndex + 1 && plain[i] === "estas") return "estás";
+    if (i === qIndex + 1 && plain[i] === "esta") return "está";
+    return word;
+  });
+
+  const text = capitalize(words.join(" "));
+  if (isQuestion) return `¿${text.replace(/[.!?]+$/, "")}?`;
+  return /[.!?…]$/.test(text) ? text : `${text}.`;
+}
+
+/**
+ * Convierte lo señado (MAYÚSCULAS, sin signos) en una oración legible:
+ * "HOLA COMO ESTAS" -> "Hola, ¿cómo estás?". Las palabras que ya vienen con
+ * mayúsculas y minúsculas (frases de plantilla o nombres) se respetan.
+ */
+function formatSentence(words: string[]) {
+  const tokens = words
+    .flatMap((word) => word.replace(/_/g, " ").split(/\s+/))
+    .filter(Boolean)
+    .map((word) =>
+      word === word.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(word) ? word.toLowerCase() : word,
+    );
+  if (tokens.length === 0) return "";
+
+  // Si ya tiene signos (frase de plantilla), solo se asegura la mayúscula inicial.
+  if (tokens.some((t) => /[¿?¡!.,]/.test(t))) {
+    const text = capitalize(tokens.join(" "));
+    return /[.!?…]$/.test(text) ? text : `${text}.`;
+  }
+
+  const plain = tokens.map(stripAccents);
+  const greeting = GREETINGS.find((g) => g.every((w, i) => plain[i] === w));
+  if (greeting && tokens.length > greeting.length) {
+    const head = capitalize(
+      tokens
+        .slice(0, greeting.length)
+        .join(" ")
+        .replace(/^buenos dias$/i, "buenos días"),
+    );
+    // "Hola, ¿cómo estás?": tras la coma la cláusula va en minúscula.
+    return `${head}, ${formatClause(tokens.slice(greeting.length)).replace(/^(¿?)(\p{L})/u, (_m, q, c) =>
+      q + c.toLowerCase(),
+    )}`;
+  }
+
+  return formatClause(tokens);
+}
+
+const nowLabel = () =>
+  new Date().toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+
 function Translator() {
   const {
     text: speechText,
@@ -174,6 +307,38 @@ function Translator() {
     stopListening,
     clearText: clearSpeechText,
   } = useSpeechRecognition();
+
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [activeTemplateId, setActiveTemplateIdState] = useState(() =>
+    getActiveTemplateId(),
+  );
+  const [faceBusy, setFaceBusy] = useState(false);
+  const [faceMessage, setFaceMessage] =
+    useState<{ type: "ok" | "error"; text: string } | null>(null);
+  // Nombre usado en las frases {nombre}: el del rostro reconocido tiene prioridad.
+  const [faceName, setFaceName] = useState<string | null>(null);
+  const [accountName, setAccountName] = useState<string | null>(null);
+  const [faceEnrolled, setFaceEnrolled] = useState(false);
+  const faceAttemptsRef = useRef(0);
+
+  useEffect(() => {
+    listTemplates("all")
+      .then(setTemplates)
+      .catch((error) => console.warn("No se pudieron cargar las plantillas:", error));
+
+    getUserProfile()
+      .then((profile) => setAccountName(profile.display_name || null))
+      .catch(() => undefined);
+
+    getFaceStatus()
+      .then((face) => setFaceEnrolled(face.recognition_ready))
+      .catch(() => setFaceEnrolled(false));
+  }, []);
+
+  const chooseTemplate = (id: string) => {
+    setActiveTemplateIdState(id);
+    setActiveTemplateId(id);
+  };
 
   const {
     speak: speakTranslation,
@@ -202,11 +367,14 @@ function Translator() {
 
   const [letter, setLetter] = useState("-");
   const [confidence, setConfidence] = useState(0);
+  const [personalized, setPersonalized] = useState(false);
   const [recognitionMode, setRecognitionMode] =
     useState<RecognitionMode>("none");
   const [recognitionInputMode, setRecognitionInputMode] =
     useState<RecognitionInputMode>("letter");
   const [status, setStatus] = useState("Iniciando...");
+  const [cameraState, setCameraState] =
+    useState<"loading" | "live" | "error">("loading");
   const [connected, setConnected] = useState(false);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCamera, setSelectedCamera] = useState("");
@@ -218,6 +386,12 @@ function Translator() {
   const [manualCorrection, setManualCorrection] = useState("");
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [aiSentence, setAiSentence] = useState("");
+  // Texto exacto que se envió a corregir: si la oración cambia, la corrección queda vieja.
+  const [aiFor, setAiFor] = useState("");
+  const aiForRef = useRef("");
+  const aiTimeoutRef = useRef<number | undefined>(undefined);
+  const [thread, setThread] = useState<ChatMessage[]>([]);
+  const threadRef = useRef<HTMLDivElement>(null);
   const [aiCorrecting, setAiCorrecting] = useState(false);
   const [aiCorrectionError, setAiCorrectionError] = useState("");
   const [autoTts, setAutoTts] = useState(() => getAutoTtsEnabled());
@@ -521,6 +695,7 @@ const initialize = async () => {
         if (typeof data.letter === "string") {
           setLetter(data.letter || "-");
           setConfidence(Number(data.confidence ?? 0));
+          setPersonalized(Boolean(data.personalized?.changed));
 
           setRecognitionMode(
             data.mode === "dynamic"
@@ -617,13 +792,14 @@ const initialize = async () => {
                 // desde el principio con la oración actualizada.
                 speakTranslation(fullMessage, "es-PE");
               }
-            } else if (completedWord) {
-              speakTranslation(completedWord, "es-PE");
             }
+            // En modo "Al enviar" no se lee cada palabra: se lee el mensaje final.
+            void completedWord;
           }
         }
 
         if (data.kind === "sentence_correction") {
+          window.clearTimeout(aiTimeoutRef.current);
           setAiCorrecting(false);
 
           const correction = data.sentence_correction;
@@ -631,10 +807,8 @@ const initialize = async () => {
           if (correction?.corrected) {
             const correctedText = String(correction.corrected);
             setAiSentence(correctedText);
+            setAiFor(aiForRef.current);
             setAiCorrectionError("");
-            if (autoTtsRef.current) {
-              speakTranslation(correctedText, "es-PE");
-            }
           } else {
             setAiCorrectionError(
               "No se pudo generar una corrección contextual."
@@ -819,6 +993,7 @@ const initialize = async () => {
     console.log("PASO 5: Cámara funcionando");
 
     setStatus("Cámara activa");
+    setCameraState("live");
     detectLoop();
 
   } catch (error) {
@@ -835,6 +1010,7 @@ const initialize = async () => {
         : String(error);
 
     setStatus(`Error: ${message}`);
+    setCameraState("error");
   }
 };
 
@@ -913,9 +1089,11 @@ const initialize = async () => {
     await loadCameras();
 
     setStatus("Cámara activa");
+    setCameraState("live");
   } catch (error) {
     console.error("Error cambiando cámara:", error);
     setStatus("No se pudo cambiar la cámara");
+    setCameraState("error");
   }
 };
 
@@ -954,6 +1132,21 @@ const initialize = async () => {
 
     setAiCorrecting(true);
     setAiCorrectionError("");
+    aiForRef.current = sentence;
+
+    // Si la IA tarda (p. ej. cargando el modelo la primera vez), se avisa y se
+    // libera el botón; el mensaje ordenado automáticamente sigue disponible.
+    window.clearTimeout(aiTimeoutRef.current);
+    aiTimeoutRef.current = window.setTimeout(() => {
+      setAiCorrecting((busy) => {
+        if (busy) {
+          setAiCorrectionError(
+            "La IA está tardando (puede estar cargando el modelo). Puedes enviar el mensaje así o intentar de nuevo en un momento.",
+          );
+        }
+        return false;
+      });
+    }, 25000);
 
     sendCommand({
       mode: "correct_sentence",
@@ -972,6 +1165,7 @@ const initialize = async () => {
     cancelWordGapTimer();
     setManualCorrection("");
     setAiSentence("");
+    setAiFor("");
     setAiCorrectionError("");
     setSelectedWordIndex(null);
     sendCommand({ mode: "clear_language" });
@@ -990,184 +1184,315 @@ const initialize = async () => {
   };
 
 
+  const currentWord =
+    language.resolved_word || language.preview_word || language.raw_word || "";
+
+  // Reconoce a la persona con su rostro registrado. El nombre obtenido se usa
+  // en las frases de la plantilla ({nombre}). `silent` evita avisos de error
+  // en los intentos automáticos.
+  const presentarme = async (silent = false) => {
+    if (!videoRef.current) return false;
+    setFaceBusy(true);
+    if (!silent) setFaceMessage(null);
+    try {
+      const frame = await captureFrame(videoRef.current);
+      const result = await verifyFace(frame);
+      if (result.verified && result.display_name) {
+        setFaceName(result.display_name);
+        setFaceMessage({
+          type: "ok",
+          text: `Hola, ${result.display_name}. Tus frases ya usan tu nombre.`,
+        });
+        window.setTimeout(() => setFaceMessage(null), 5000);
+        return true;
+      }
+      if (!silent) {
+        setFaceMessage({ type: "error", text: result.message });
+        window.setTimeout(() => setFaceMessage(null), 5000);
+      }
+    } catch (error) {
+      if (!silent) {
+        setFaceMessage({
+          type: "error",
+          text: error instanceof Error ? error.message : "No se pudo verificar el rostro.",
+        });
+        window.setTimeout(() => setFaceMessage(null), 5000);
+      }
+    } finally {
+      setFaceBusy(false);
+    }
+    return false;
+  };
+
+  // Reconocimiento automático: con la cámara activa y un rostro registrado,
+  // se intenta identificar a la persona (hasta 4 intentos, cada 4 s).
+  useEffect(() => {
+    if (cameraState !== "live" || !faceEnrolled || faceName) return;
+    if (faceAttemptsRef.current >= 4) return;
+
+    const timer = window.setTimeout(async () => {
+      faceAttemptsRef.current += 1;
+      const ok = await presentarme(true);
+      if (!ok && faceAttemptsRef.current < 4) {
+        // fuerza un nuevo intento cambiando el estado del efecto
+        setFaceBusy(false);
+      }
+    }, faceAttemptsRef.current === 0 ? 1500 : 4000);
+
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraState, faceEnrolled, faceName, faceBusy]);
+
+  const personName = faceName || accountName;
+
+  useEffect(() => {
+    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: "smooth" });
+  }, [thread.length]);
+
+  // Al terminar de hablar, la respuesta del personal pasa al chat.
+  const wasListeningRef = useRef(false);
+  useEffect(() => {
+    if (wasListeningRef.current && !isListening && speechText.trim()) {
+      setThread((list) => [
+        ...list,
+        { id: Date.now(), from: "staff", text: speechText.trim(), time: nowLabel() },
+      ]);
+      clearSpeechText();
+    }
+    wasListeningRef.current = isListening;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isListening]);
+
+  // Plantilla activa ("all" = todas las visibles para la cuenta).
+  const activeTemplates =
+    activeTemplateId === "all"
+      ? templates
+      : templates.filter((t) => t.id === activeTemplateId);
+  const activeTemplate =
+    activeTemplateId === "all" ? null : activeTemplates[0] ?? null;
+
+  // Lo señado hasta ahora: palabras cerradas + letras de la palabra en curso.
+  const signedSoFar = [...language.sentence_words, language.raw_word]
+    .filter(Boolean)
+    .join(" ");
+  const phraseSuggestions = suggestPhrases(
+    signedSoFar,
+    activeTemplates.length > 0 ? activeTemplates : templates,
+    personName,
+  );
+
+  // Mensaje final: lo que la persona quiso decir.
+  // 1) corrección con IA si corresponde al texto actual, 2) frase de plantilla
+  //    tal cual, 3) lo señado ordenado automáticamente.
+  const signedWords = [
+    ...language.sentence_words,
+    ...(currentWord ? [currentWord] : []),
+  ];
+  const signedText = language.display_text.trim();
+  const fromTemplate = language.sentence_words.some((w) => w !== w.toUpperCase());
+  const finalMessage: { text: string; source: "ia" | "plantilla" | "auto" } =
+    aiSentence && aiFor && aiFor === signedText
+      ? { text: aiSentence, source: "ia" }
+      : { text: formatSentence(signedWords), source: fromTemplate ? "plantilla" : "auto" };
+
+  const enviarMensaje = () => {
+    if (!finalMessage.text) return;
+    setThread((list) => [
+      ...list,
+      {
+        id: Date.now(),
+        from: "user",
+        text: finalMessage.text,
+        original: signedWords.join(" "),
+        time: nowLabel(),
+      },
+    ]);
+    if (autoTts) speakTranslation(finalMessage.text, "es-PE");
+    limpiar();
+  };
+
+  const usarFrase = (text: string, replace: boolean) => {
+    sendCommand({
+      mode: "insert_text",
+      text,
+      source: "template",
+      keep_case: true,
+      replace,
+    });
+  };
+
+  const modeLabel =
+    recognitionMode === "word"
+      ? "Palabra completa"
+      : recognitionMode === "dynamic"
+        ? "Dinámica"
+        : recognitionMode === "static"
+          ? "Estática"
+          : "";
+
+  const hasSentence =
+    Boolean(language.raw_word) || language.sentence_words.length > 0;
+
+  const suggestionSource = selectedSentenceItem
+    ? selectedSentenceItem.suggestions
+    : language.suggestions;
+
   return (
-    <div className="page translator-page">
-      <div className="page-heading">
-        <div>
-          <h2>Sing-lang</h2>
-          <p>Reconocimiento de Lengua de Señas.</p>
-        </div>
-
-        <div
-          className={`translator-status ${connected ? "connected" : ""}`}
-        >
-          <span />
-          {connected ? "Backend conectado" : "Backend desconectado"}
-        </div>
-      </div>
-
-      <div className="translator-grid">
-        <section className="panel translator-camera-panel">
-          <div className="translator-panel-title">
-            <div>
-              <h3>Camara</h3>
-              <p>Realiza una seña frente a la camara</p>
-            </div>
-            <span className="camera-live">EN VIVO</span>
+    <div className="page translator-page tw">
+      {/* ============ COLUMNA PRINCIPAL: CÁMARA ============ */}
+      <section className="tw-main">
+        <div className="tw-toolbar">
+          <div className="tw-segmented" role="group" aria-label="Modo de reconocimiento">
+            <button
+              type="button"
+              className={recognitionInputMode === "letter" ? "active" : ""}
+              onClick={() => setRecognitionInputMode("letter")}
+            >
+              <CaseSensitive size={16} /> Letras
+            </button>
+            <button
+              type="button"
+              className={recognitionInputMode === "word" ? "active" : ""}
+              onClick={() => setRecognitionInputMode("word")}
+            >
+              <WholeWord size={16} /> Palabras
+            </button>
           </div>
-          <div className="camera-controls">
-  <div className="recognition-input-mode">
-    <span>Modo de reconocimiento</span>
-    <div>
-      <button
-        type="button"
-        className={recognitionInputMode === "letter" ? "active" : ""}
-        onClick={() => setRecognitionInputMode("letter")}
-      >
-        Letras
-      </button>
-      <button
-        type="button"
-        className={recognitionInputMode === "word" ? "active" : ""}
-        onClick={() => setRecognitionInputMode("word")}
-      >
-        Palabras
-      </button>
-    </div>
-  </div>
 
-  <div className="camera-selector">
-    <label htmlFor="camera-select">
-      Cámara
-    </label>
+          <label className="tw-camera-select" htmlFor="camera-select">
+            <Camera size={16} />
+            <select
+              id="camera-select"
+              aria-label="Cámara"
+              value={selectedCamera}
+              onChange={(event) => changeCamera(event.target.value)}
+            >
+              {cameras.length === 0 && <option value="">Sin cámaras</option>}
+              {cameras.map((camera, index) => (
+                <option key={camera.deviceId} value={camera.deviceId}>
+                  {camera.label || `Cámara ${index + 1}`}
+                </option>
+              ))}
+            </select>
+          </label>
 
-    <select
-      id="camera-select"
-      value={selectedCamera}
-      onChange={(event) =>
-        changeCamera(event.target.value)
-      }
-    >
-      {cameras.map((camera, index) => (
-        <option
-          key={camera.deviceId}
-          value={camera.deviceId}
-        >
-          {camera.label ||
-            `Cámara ${index + 1}`}
-        </option>
-      ))}
-    </select>
-  </div>
+          <button
+            type="button"
+            className="tw-icon-button"
+            onClick={() =>
+              changeCamera(
+                undefined,
+                cameraFacing === "user" ? "environment" : "user",
+              )
+            }
+            title={
+              cameraFacing === "user"
+                ? "Cambiar a cámara trasera"
+                : "Cambiar a cámara frontal"
+            }
+          >
+            <SwitchCamera size={17} />
+            <span>{cameraFacing === "user" ? "Frontal" : "Trasera"}</span>
+          </button>
 
-  <div className="mobile-camera-buttons">
-    <button
-      type="button"
-      className={
-        cameraFacing === "user" ? "active" : ""
-      }
-      onClick={() =>
-        changeCamera(undefined, "user")
-      }
-    >
-      Cámara frontal
-    </button>
+          <button
+            type="button"
+            className="tw-icon-button"
+            onClick={() => presentarme()}
+            disabled={faceBusy || cameraState !== "live"}
+            title={
+              faceName
+                ? `Reconocido por rostro: ${faceName}. Pulsa para volver a verificar.`
+                : "Reconoce tu rostro registrado para usar tu nombre en las frases"
+            }
+          >
+            {faceBusy ? <Loader2 size={17} className="tw-spin" /> : <UserCheck size={17} />}
+            <span>{faceName ? faceName : "Presentarme"}</span>
+          </button>
 
-    <button
-      type="button"
-      className={
-        cameraFacing === "environment"
-          ? "active"
-          : ""
-      }
-      onClick={() =>
-        changeCamera(undefined, "environment")
-      }
-    >
-      Cámara trasera
-    </button>
-  </div>
-</div>
+          <div
+            className={`tw-pill ${connected ? "ok" : "off"}`}
+            title={connected ? "Backend conectado" : "Backend desconectado"}
+          >
+            <span />
+            {connected ? "Conectado" : "Sin conexión"}
+          </div>
+        </div>
 
-          <div className="translator-camera">
-            <video
-  ref={videoRef}
-  autoPlay
-  playsInline
-  muted
-/>
+        <div className="tw-stage">
+          <div className="translator-camera tw-camera">
+            <video ref={videoRef} autoPlay playsInline muted />
             <canvas ref={canvasRef} width={640} height={480} />
-            <div className="camera-status">{status}</div>
-          </div>
 
-          <div className="camera-help">
-            {recognitionInputMode === "letter"
-              ? "Modo Letras: usa el reconocimiento estático/dinámico actual y construye palabras letra por letra."
-              : "Modo Palabras: analiza dos manos y la pose de brazos/torso durante una secuencia para reconocer una seña como palabra completa."}
-          </div>
-        </section>
-
-        <section className="panel recognition-panel">
-          <div className="translator-panel-title">
-            <div>
-              <h3>Reconocimiento</h3>
-              <p>
-                Resultado de la seña detectada
-                {recognitionMode === "word"
-                  ? " · Palabra completa"
-                  : recognitionMode === "dynamic"
-                    ? " · Dinámica"
-                    : recognitionMode === "static"
-                      ? " · Estática"
-                      : ""}
-              </p>
-            </div>
-          </div>
-
-          <div className="recognized-sign">
-            <span>
-              {recognitionInputMode === "word"
-                ? "Palabra reconocida"
-                : "Seña reconocida"}
-            </span>
-            <strong className={recognitionInputMode === "word" ? "recognized-word" : ""}>
-              {letter}
-            </strong>
-          </div>
-
-          <div className="translator-confidence">
-            <div>
-              <span>Confianza</span>
-              <strong>{(confidence * 100).toFixed(1)}%</strong>
+            <div className={`tw-live ${cameraState}`} title={status}>
+              {cameraState === "live" ? (
+                <>
+                  <span className="tw-live-dot" /> EN VIVO
+                </>
+              ) : cameraState === "error" ? (
+                <>
+                  <CircleAlert size={14} /> {status}
+                </>
+              ) : (
+                <>
+                  <Loader2 size={14} className="tw-spin" /> {status}
+                </>
+              )}
             </div>
 
-            <div className="translator-progress">
-              <div
-                style={{
-                  width: `${Math.min(confidence * 100, 100)}%`,
-                }}
-              />
+            {faceMessage && (
+              <div className={`tw-face-toast ${faceMessage.type}`}>{faceMessage.text}</div>
+            )}
+
+            {cameraState === "live" && status !== "Cámara activa" && (
+              <div className="tw-status-chip">{status}</div>
+            )}
+
+            <div className="tw-result">
+              <div className="tw-result-sign">
+                <small>
+                  {recognitionInputMode === "word" ? "Palabra" : "Seña"}
+                  {modeLabel ? ` · ${modeLabel}` : ""}
+                </small>
+                <strong className={recognitionInputMode === "word" ? "word" : ""}>
+                  {letter}
+                </strong>
+              </div>
+              <div className="tw-result-conf">
+                <div>
+                  <small>Confianza</small>
+                  <b>{(confidence * 100).toFixed(0)}%</b>
+                </div>
+                <div className="tw-bar">
+                  <i style={{ width: `${Math.min(confidence * 100, 100)}%` }} />
+                </div>
+                {personalized && recognitionInputMode !== "word" && (
+                  <small className="tw-personal">Ajustado por tu modelo personal</small>
+                )}
+              </div>
             </div>
+          </div>
+        </div>
+
+        <div className="tw-wordbar">
+          <div className="tw-current">
+            <small>Palabra en curso</small>
+            <strong>{currentWord || "—"}</strong>
           </div>
 
           {recognitionInputMode === "word" && (
-            <div className="word-sequence-status">
-              <div>
-                <span>Secuencia temporal</span>
-                <strong>
-                  {Math.min(wordBuffer, 30)}/30
-                </strong>
-              </div>
+            <div className="tw-sequence">
               <small>
-                Frames del gesto: {wordGestureFrames}
+                Secuencia {Math.min(wordBuffer, 30)}/30 · {wordGestureFrames} frames
               </small>
-
+              <div className="tw-bar">
+                <i style={{ width: `${(Math.min(wordBuffer, 30) / 30) * 100}%` }} />
+              </div>
               {wordCandidates.length > 0 && (
-                <div className="word-candidate-list">
+                <div className="tw-candidates">
                   {wordCandidates.map((candidate) => (
                     <span key={`${candidate.word}-${candidate.confidence}`}>
-                      {candidate.word}{" "}
-                      {(candidate.confidence * 100).toFixed(0)}%
+                      {candidate.word} {(candidate.confidence * 100).toFixed(0)}%
                     </span>
                   ))}
                 </div>
@@ -1175,413 +1500,376 @@ const initialize = async () => {
             </div>
           )}
 
-          <div className="language-capture-status">
-            <span>Palabra interpretada</span>
-            <strong>
-              {language.resolved_word || language.preview_word || language.raw_word || "-"}
-            </strong>
-          </div>
-
-          {recognitionInputMode === "letter" ? (
+          {recognitionInputMode === "letter" && (
             <button
-              className="translator-primary-button"
+              type="button"
+              className="tw-primary"
               onClick={finalizarPalabra}
               disabled={!language.raw_word}
             >
               Finalizar palabra
             </button>
-          ) : (
-            <div className="word-mode-hint">
-              La palabra se agrega automáticamente cuando el gesto temporal
-              alcanza la confianza mínima del modelo.
-            </div>
-          )}
-        </section>
-      </div>
-
-      <section className="panel translator-message">
-        <div className="translator-panel-title">
-          <div>
-            <h3>Construccion de la oracion</h3>
-            <p>
-              El corrector propone palabras segun errores visuales, frecuencia y contexto.
-            </p>
-          </div>
-          <span className="character-counter">
-            {language.display_text.length} caracteres
-          </span>
-        </div>
-
-        <div className="language-word-grid">
-          <div className="language-word-card corrected">
-            <span>Secuencia reconocida</span>
-            <strong>
-              {language.resolved_word || language.preview_word || language.raw_word || "-"}
-            </strong>
-          </div>
-
-          <div className="language-word-card">
-            <span>Captura original</span>
-            <strong>{language.raw_word || "-"}</strong>
-          </div>
-        </div>
-
-        <div className="language-suggestions">
-          <span className="language-suggestions-label">Sugerencias</span>
-
-          <div className="language-suggestion-buttons">
-            {language.suggestions.length > 0 ? (
-              language.suggestions.map((suggestion) => (
-                <button
-                  type="button"
-                  key={`${suggestion.word}-${suggestion.score}`}
-                  onClick={() => elegirSugerencia(suggestion.word)}
-                  title={`Score ${(suggestion.score * 100).toFixed(1)}%`}
-                >
-                  <strong>{suggestion.word}</strong>
-                  <span>{(suggestion.score * 100).toFixed(0)}%</span>
-                </button>
-              ))
-            ) : (
-              <span className="language-no-suggestions">
-                Escribe al menos dos letras para obtener sugerencias.
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div
-          className={`translator-text ${
-            !language.display_text ? "empty" : ""
-          }`}
-        >
-          {language.sentence_words.length > 0 ? (
-            <div className="sentence-word-list">
-              {language.sentence_words.map((word, index) => (
-                <button
-                  key={`${index}-${word}`}
-                  type="button"
-                  className={`sentence-word-button ${
-                    selectedWordIndex === index ? "active" : ""
-                  }`}
-                  onClick={() => setSelectedWordIndex(index)}
-                  title="Haz clic para revisar las sugerencias de esta palabra"
-                >
-                  {word}
-                </button>
-              ))}
-
-              {language.resolved_word && (
-                <span className="sentence-current-word">
-                  {language.resolved_word}
-                </span>
-              )}
-            </div>
-          ) : (
-            language.resolved_word ||
-            "La oracion corregida aparecera aqui..."
-          )}
-        </div>
-
-        {selectedSentenceItem && (
-          <div className="language-suggestions selected-word-suggestions">
-            <span className="language-suggestions-label">
-              Sugerencias para: {selectedSentenceItem.word}
-              {selectedSentenceItem.raw &&
-              selectedSentenceItem.raw !== selectedSentenceItem.word
-                ? ` · reconocido: ${selectedSentenceItem.raw}`
-                : ""}
-            </span>
-
-            <div className="language-suggestion-buttons">
-              {selectedSentenceItem.suggestions.length > 0 ? (
-                selectedSentenceItem.suggestions.map((suggestion) => (
-                  <button
-                    type="button"
-                    key={`selected-${selectedSentenceItem.index}-${suggestion.word}-${suggestion.score}`}
-                    onClick={() =>
-                      elegirSugerenciaDePalabra(suggestion.word)
-                    }
-                    title={`Score ${(suggestion.score * 100).toFixed(1)}%`}
-                  >
-                    <strong>{suggestion.word}</strong>
-                    <span>{(suggestion.score * 100).toFixed(0)}%</span>
-                  </button>
-                ))
-              ) : (
-                <span className="language-no-suggestions">
-                  No hay alternativas guardadas para esta palabra.
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="language-word-grid">
-          <div className="language-word-card corrected">
-            <span>Oración contextual (IA)</span>
-            <strong>
-              {aiSentence ||
-                "Finaliza varias palabras y usa “Corregir oración con IA”."}
-            </strong>
-          </div>
-        </div>
-
-        {aiCorrectionError && (
-          <div className="language-event-message error">
-            {aiCorrectionError}
-          </div>
-        )}
-
-        {language.event?.type === "word_finalized" && (
-          <div className="language-event-message">
-            Palabra agregada: {String(language.event.word ?? "")}
-          </div>
-        )}
-
-        {language.event?.type === "word_sign_added" && (
-          <div className="language-event-message">
-            Seña de palabra agregada: {String(language.event.word ?? "")}
-          </div>
-        )}
-
-        {language.event?.type === "sentence_word_replaced" && (
-          <div className="language-event-message">
-            Palabra cambiada: {String(language.event.previous_word ?? "")}
-            {" → "}
-            {String(language.event.word ?? "")}
-          </div>
-        )}
-
-        {language.learning?.pending_feedback && (
-          <div className="learning-feedback-card">
-            <div className="learning-feedback-header">
-              <div>
-                <h4>Corrección automática</h4>
-                <p>
-                  Si continúas con la siguiente palabra, el sistema usa esta
-                  corrección como aprendizaje débil de forma automática.
-                </p>
-              </div>
-              <span>Aprendizaje adaptativo</span>
-            </div>
-
-            <div className="learning-feedback-comparison">
-              <div>
-                <span>Reconocido</span>
-                <strong>{language.learning.pending_feedback.raw}</strong>
-              </div>
-              <div className="learning-arrow">→</div>
-              <div>
-                <span>Interpretado</span>
-                <strong>{language.learning.pending_feedback.predicted}</strong>
-              </div>
-            </div>
-
-            <div className="learning-correction-row">
-              <input
-                type="text"
-                value={manualCorrection}
-                onChange={(event) => setManualCorrection(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    corregirYAprender();
-                  }
-                }}
-                placeholder="Solo corrige si el resultado está mal"
-                maxLength={30}
-              />
-              <button
-                type="button"
-                onClick={corregirYAprender}
-                disabled={!manualCorrection.trim()}
-              >
-                Corregir
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="learning-stats-bar">
-          <span>
-            Correcciones aprendidas: {language.learning?.stats?.memory?.feedback_count ?? 0}
-          </span>
-          <span>
-            Confusiones: {language.learning?.stats?.memory?.learned_substitution_pairs ?? 0}
-          </span>
-          <span>
-            Ranker ML: {language.learning?.stats?.ranker?.trained_feedback ?? 0} feedback
-          </span>
-          <span>
-            Peso ML: {(((language.learning?.stats?.ranker?.effective_weight ?? 0) * 100)).toFixed(0)}%
-          </span>
-        </div>
-
-        {language.error && (
-          <div className="language-event-message error">
-            {language.error}
-          </div>
-        )}
-
-        <div className="translator-actions">
-          <button
-            type="button"
-            className={`voice-button ${autoTts ? "active" : ""}`}
-            onClick={() => setAutoTts((value) => !value)}
-            disabled={!ttsSupported}
-            title="Lee automáticamente la traducción al finalizar palabras u obtener la corrección de Qwen"
-          >
-            Lectura automática: {autoTts ? "ACTIVADA" : "DESACTIVADA"}
-            {translationSpeaking ? " · hablando" : ""}
-          </button>
-
-          {autoTts && (
-            <div className="tts-reading-mode">
-              <span>Modo de lectura</span>
-              <div>
-                <button
-                  type="button"
-                  className={
-                    autoTtsMode === "new_words" ? "active" : ""
-                  }
-                  onClick={() =>
-                    setAutoTtsModeState("new_words")
-                  }
-                >
-                  Solo nuevas
-                </button>
-                <button
-                  type="button"
-                  className={
-                    autoTtsMode === "continuous" ? "active" : ""
-                  }
-                  onClick={() =>
-                    setAutoTtsModeState("continuous")
-                  }
-                >
-                  Lectura corrida
-                </button>
-              </div>
-            </div>
           )}
 
-          <button
-            className="translator-primary-button"
-            onClick={corregirOracionIA}
-            disabled={
-              aiCorrecting ||
-              (!language.display_text.trim() && !language.raw_word)
+          <span
+            className="tw-hint"
+            title={
+              recognitionInputMode === "letter"
+                ? `Modo Letras: retira la mano brevemente para repetir una letra; una pausa cercana a ${WORD_GAP_MS} ms finaliza y corrige la palabra.`
+                : "Modo Palabras: analiza dos manos y la pose de brazos/torso; cada gesto completo se agrega como una palabra cuando alcanza la confianza mínima."
             }
           >
-            {aiCorrecting ? "Corrigiendo con IA..." : "Corregir oración con IA"}
-          </button>
+            <Info size={16} />
+          </span>
+        </div>
+      </section>
 
-          {recognitionInputMode === "letter" && (
-            <button onClick={finalizarPalabra} disabled={!language.raw_word}>
-              Finalizar palabra
+      {/* ============ COLUMNA DERECHA: CONVERSACIÓN ============ */}
+      <aside className="tw-side">
+        <section className="tw-card tw-conversation">
+          <header className="tw-card-head">
+            <div>
+              <h3>
+                <MessageSquareText size={17} /> Conversación
+              </h3>
+              <p>
+                {thread.length > 0
+                  ? `${thread.length} ${thread.length === 1 ? "mensaje" : "mensajes"}`
+                  : "Los mensajes enviados aparecerán aquí"}
+              </p>
+            </div>
+            <div className="tw-head-actions">
+              {thread.length > 0 && (
+                <button
+                  type="button"
+                  className="tw-icon-button"
+                  onClick={() => setThread([])}
+                  title="Empezar una conversación nueva"
+                >
+                  <RotateCcw size={15} />
+                </button>
+              )}
+              <button
+                type="button"
+                className={`tw-icon-button ${autoTts ? "active" : ""}`}
+                onClick={() => setAutoTts((value) => !value)}
+                disabled={!ttsSupported}
+                title="Leer en voz alta los mensajes"
+              >
+                {autoTts ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                <span>{translationSpeaking ? "Hablando…" : autoTts ? "Voz" : "Sin voz"}</span>
+              </button>
+            </div>
+          </header>
+
+          {/* -------- Historial: lo que se dijo de verdad -------- */}
+          <div className="tw-thread" ref={threadRef}>
+            {thread.length === 0 ? (
+              <div className="tw-thread-empty">
+                Señas → revisa el mensaje final abajo → <strong>Enviar</strong>.
+                <br />
+                Las respuestas del personal también se agregan aquí.
+              </div>
+            ) : (
+              thread.map((item) => (
+                <div key={item.id} className={`tw-bubble ${item.from}`}>
+                  <small>
+                    {item.from === "user" ? personName || "Persona" : "Personal"} ·{" "}
+                    {item.time}
+                  </small>
+                  <p>{item.text}</p>
+                  {item.from === "user" && item.original && item.original !== item.text && (
+                    <em title="Lo que se reconoció de las señas">Señado: {item.original}</em>
+                  )}
+                  {ttsSupported && (
+                    <button
+                      type="button"
+                      className="tw-bubble-speak"
+                      onClick={() => speakTranslation(item.text, "es-PE")}
+                      aria-label="Leer en voz alta"
+                      title="Leer en voz alta"
+                    >
+                      <Volume2 size={13} />
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* -------- Mensaje final que se está componiendo -------- */}
+          <div className="tw-composer">
+            <div className="tw-final">
+              <span className="tw-label">
+                Lo que quieres decir
+                {finalMessage.text && (
+                  <i className={`tw-source ${finalMessage.source}`}>
+                    {finalMessage.source === "ia"
+                      ? "Corregido con IA"
+                      : finalMessage.source === "plantilla"
+                        ? "Plantilla"
+                        : "Ordenado automáticamente"}
+                  </i>
+                )}
+              </span>
+              <p className={finalMessage.text ? "" : "empty"}>
+                {finalMessage.text || "Empieza a señar o elige una frase de tu plantilla…"}
+              </p>
+
+              {(language.sentence_words.length > 0 || currentWord) && (
+                <div className="tw-signed">
+                  <small>Señado:</small>
+                  {language.sentence_words.map((word, index) => (
+                    <button
+                      key={`${index}-${word}`}
+                      type="button"
+                      className={selectedWordIndex === index ? "active" : ""}
+                      onClick={() =>
+                        setSelectedWordIndex(selectedWordIndex === index ? null : index)
+                      }
+                      title="Ver otras opciones para esta palabra"
+                    >
+                      {word}
+                    </button>
+                  ))}
+                  {currentWord && <span className="tw-signed-current">{currentWord}…</span>}
+                </div>
+              )}
+            </div>
+
+            {/* Alternativas para una palabra elegida, o para la que se deletrea */}
+            {(selectedSentenceItem || language.suggestions.length > 0) && (
+              <div className="tw-chips tw-mini">
+                <span className="tw-mini-label">
+                  {selectedSentenceItem ? `¿Quisiste decir…? (${selectedSentenceItem.word})` : "Palabra:"}
+                </span>
+                {suggestionSource.length > 0 ? (
+                  suggestionSource.slice(0, 5).map((suggestion) => (
+                    <button
+                      type="button"
+                      key={`${selectedSentenceItem?.index ?? "cur"}-${suggestion.word}-${suggestion.score}`}
+                      onClick={() =>
+                        selectedSentenceItem
+                          ? elegirSugerenciaDePalabra(suggestion.word)
+                          : elegirSugerencia(suggestion.word)
+                      }
+                      title={`Puntaje ${(suggestion.score * 100).toFixed(0)}%`}
+                    >
+                      {suggestion.word}
+                    </button>
+                  ))
+                ) : (
+                  <span className="tw-muted">Sin alternativas.</span>
+                )}
+              </div>
+            )}
+
+            {/* Frases de la plantilla activa */}
+            <div className="tw-template-bar">
+              <label className="tw-template-select" title="Plantilla de frases activa">
+                <LayoutTemplate size={15} />
+                <select
+                  value={activeTemplate ? activeTemplateId : "all"}
+                  onChange={(event) => chooseTemplate(event.target.value)}
+                  aria-label="Plantilla activa"
+                >
+                  <option value="all">Todas las plantillas</option>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                      {template.owner === "Mi cuenta" ? " (mía)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span
+                className={`tw-person ${faceName ? "face" : ""}`}
+                title={
+                  faceName
+                    ? "Nombre obtenido del reconocimiento facial"
+                    : "Nombre de la cuenta (pulsa Presentarme para usar tu rostro)"
+                }
+              >
+                {faceName ? <ScanFace size={14} /> : <UserRound size={14} />}
+                {personName || "Sin nombre"}
+              </span>
+            </div>
+
+            {phraseSuggestions.length > 0 && (
+              <div className="tw-phrases">
+                {phraseSuggestions.slice(0, 3).map((item) => (
+                  <button
+                    type="button"
+                    key={`${item.pack}-${item.text}`}
+                    className={item.personalized ? "personal" : ""}
+                    onClick={() => usarFrase(item.text, item.replace)}
+                    title={`${item.pack} · ${item.replace ? "reemplaza lo señado" : "se agrega al mensaje"}`}
+                  >
+                    <span>{item.text}</span>
+                    <small>{item.pack}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Corrección manual: solo cuando el corrector cambió la palabra */}
+            {language.learning?.pending_feedback &&
+              language.learning.pending_feedback.raw !==
+                language.learning.pending_feedback.predicted && (
+                <div className="tw-feedback">
+                  <div className="tw-feedback-row">
+                    <span>
+                      <small>Reconocido</small>
+                      <b>{language.learning.pending_feedback.raw}</b>
+                    </span>
+                    <span className="tw-arrow">→</span>
+                    <span>
+                      <small>Interpretado</small>
+                      <b>{language.learning.pending_feedback.predicted}</b>
+                    </span>
+                  </div>
+                  <div className="tw-feedback-input">
+                    <input
+                      type="text"
+                      value={manualCorrection}
+                      onChange={(event) => setManualCorrection(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") corregirYAprender();
+                      }}
+                      placeholder="¿Está mal? Escribe la palabra correcta"
+                      maxLength={30}
+                    />
+                    <button
+                      type="button"
+                      onClick={corregirYAprender}
+                      disabled={!manualCorrection.trim()}
+                    >
+                      Corregir
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            {aiCorrectionError && <div className="tw-msg error">{aiCorrectionError}</div>}
+            {language.error && <div className="tw-msg error">{language.error}</div>}
+
+            <details className="tw-details">
+              <summary>
+                <SlidersHorizontal size={14} /> Más opciones
+              </summary>
+              {autoTts && (
+                <div className="tw-inline tw-details-row">
+                  <span className="tw-label">Lectura</span>
+                  <div className="tw-segmented small">
+                    <button
+                      type="button"
+                      className={autoTtsMode === "new_words" ? "active" : ""}
+                      onClick={() => setAutoTtsModeState("new_words")}
+                    >
+                      Al enviar
+                    </button>
+                    <button
+                      type="button"
+                      className={autoTtsMode === "continuous" ? "active" : ""}
+                      onClick={() => setAutoTtsModeState("continuous")}
+                    >
+                      Mientras señas
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="tw-details-grid">
+                <span>Captura original: <b>{language.raw_word || "-"}</b></span>
+                <span>Correcciones aprendidas: <b>{language.learning?.stats?.memory?.feedback_count ?? 0}</b></span>
+                <span>Confusiones: <b>{language.learning?.stats?.memory?.learned_substitution_pairs ?? 0}</b></span>
+                <span>Peso ML: <b>{(((language.learning?.stats?.ranker?.effective_weight ?? 0) * 100)).toFixed(0)}%</b></span>
+              </div>
+            </details>
+          </div>
+
+          <footer className="tw-actions">
+            <button
+              type="button"
+              className="tw-primary"
+              onClick={enviarMensaje}
+              disabled={!finalMessage.text}
+              title="Agregar el mensaje final a la conversación"
+            >
+              <Send size={15} /> Enviar
             </button>
+            <button
+              type="button"
+              onClick={corregirOracionIA}
+              disabled={aiCorrecting || (!language.display_text.trim() && !language.raw_word)}
+              title="Mejorar el mensaje con IA (tildes, puntuación y contexto)"
+            >
+              {aiCorrecting ? <Loader2 size={15} className="tw-spin" /> : <Sparkles size={15} />}
+              IA
+            </button>
+            <button type="button" onClick={borrarUltimo} disabled={!hasSentence} title="Borrar la última palabra">
+              <Undo2 size={15} />
+            </button>
+            <button
+              type="button"
+              className="tw-danger"
+              onClick={limpiar}
+              disabled={!hasSentence}
+              title="Descartar el mensaje"
+            >
+              <Trash2 size={15} />
+            </button>
+          </footer>
+        </section>
+
+        <section className="tw-card tw-response">
+          <header className="tw-card-head">
+            <div>
+              <h3>
+                <Mic size={17} /> Respuesta del personal
+              </h3>
+              <p>Habla y se agregará a la conversación</p>
+            </div>
+            <div className={`tw-pill ${isListening ? "rec" : ""}`}>
+              <span />
+              {isListening ? "Escuchando" : "Micrófono listo"}
+            </div>
+          </header>
+
+          <div className={`tw-speech ${!speechText ? "empty" : ""}`}>
+            {speechText || "Pulsa Hablar; al detener, el texto pasa al chat."}
+          </div>
+
+          {speechError && <div className="tw-msg error">{speechError}</div>}
+          {!speechSupported && (
+            <div className="tw-msg error">
+              El reconocimiento de voz no está disponible en este navegador.
+            </div>
           )}
 
-          <button
-            onClick={borrarUltimo}
-            disabled={!language.raw_word && language.sentence_words.length === 0}
-          >
-            Borrar ultimo
-          </button>
-
-          <button
-            className="translator-danger-button"
-            onClick={limpiar}
-            disabled={!language.raw_word && language.sentence_words.length === 0}
-          >
-            Limpiar
-          </button>
-        </div>
-
-        <div className="language-help">
-          {recognitionInputMode === "letter"
-            ? `Modo Letras: retira la mano brevemente para repetir una letra; una pausa cercana a ${WORD_GAP_MS} ms finaliza y corrige la palabra.`
-            : "Modo Palabras: cada gesto completo se agrega como una palabra. Las sugerencias, aprendizaje, Qwen contextual y locutor continúan usando la misma oración."}
-        </div>
-      </section>
-
-      <section className="panel staff-response-section">
-        <div className="staff-response-header">
-          <div>
-            <h3>Respuesta del personal</h3>
-            <p>
-              Convierte la voz del personal en texto para facilitar la comunicacion
-              con el usuario.
-            </p>
-          </div>
-
-          <div
-            className={`microphone-status ${isListening ? "listening" : ""}`}
-          >
-            <span className="microphone-status-dot" />
-            {isListening ? "Escuchando" : "Microfono listo"}
-          </div>
-        </div>
-
-        <div className="speech-content">
-          <div className="speech-content-header">
-            <span>Texto reconocido por voz</span>
-            <span className="speech-character-count">
-              {speechText.length} caracteres
-            </span>
-          </div>
-
-          <div className={`speech-result ${!speechText ? "empty" : ""}`}>
-            {speechText || "La respuesta hablada aparecera aqui..."}
-          </div>
-        </div>
-
-        {speechError && <div className="speech-error">{speechError}</div>}
-
-        {!speechSupported && (
-          <div className="speech-warning">
-            El reconocimiento de voz no esta disponible en este navegador.
-          </div>
-        )}
-
-        <div className="speech-toolbar">
-          <div className="speech-controls">
-            <button
-              type="button"
-              className="speech-button speech-start"
-              onClick={startListening}
-              disabled={!speechSupported || isListening}
-            >
-              <span>Iniciar microfono</span>
+          <footer className="tw-actions">
+            {isListening ? (
+              <button type="button" className="tw-danger solid" onClick={stopListening}>
+                <MicOff size={15} /> Detener
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="tw-primary"
+                onClick={startListening}
+                disabled={!speechSupported}
+              >
+                <Mic size={15} /> Hablar
+              </button>
+            )}
+            <button type="button" onClick={clearSpeechText} disabled={!speechText}>
+              <Eraser size={15} /> Limpiar
             </button>
-
-            <button
-              type="button"
-              className="speech-button speech-stop"
-              onClick={stopListening}
-              disabled={!isListening}
-            >
-              <span>Detener</span>
-            </button>
-
-            <button
-              type="button"
-              className="speech-button speech-clear"
-              onClick={clearSpeechText}
-              disabled={!speechText}
-            >
-              <span>Limpiar respuesta</span>
-            </button>
-          </div>
-
-          <div className="speech-language">
-            <span>Idioma</span>
-            <strong>Español (Peru)</strong>
-          </div>
-        </div>
-      </section>
+          </footer>
+        </section>
+      </aside>
     </div>
   );
+
 }
 
 export default Translator;

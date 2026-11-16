@@ -26,25 +26,42 @@ class RecognitionService:
         self.dynamic_session = None
         self.scaler_static = None
         self.scaler_dynamic = None
+        self.providers = self._select_providers()
         self._load_models()
+
+    @staticmethod
+    def _select_providers():
+        """Usa CUDA cuando la instalación de ONNX Runtime la expone; si no, CPU."""
+        available = ort.get_available_providers()
+        preferred = []
+        if "CUDAExecutionProvider" in available:
+            preferred.append("CUDAExecutionProvider")
+        if "CPUExecutionProvider" in available:
+            preferred.append("CPUExecutionProvider")
+        return preferred or available
+
+    def device_status(self):
+        return {"providers_available": ort.get_available_providers(),
+                "providers_selected": self.providers,
+                "gpu_enabled": "CUDAExecutionProvider" in self.providers}
 
     def _load_models(self):
         try:
             if os.path.exists(GESTURE_MODEL_PATH):
                 self.static_session = ort.InferenceSession(
                     GESTURE_MODEL_PATH,
-                    providers=["CPUExecutionProvider"],
+                    providers=self.providers,
                 )
-                print(f"Modelo estatico cargado: {GESTURE_MODEL_PATH}")
+                print(f"Modelo estatico cargado: {GESTURE_MODEL_PATH} | proveedores: {self.static_session.get_providers()}")
             else:
                 print(f"ADVERTENCIA: No se encontro {GESTURE_MODEL_PATH}")
 
             if os.path.exists(LSTM_MODEL_PATH):
                 self.dynamic_session = ort.InferenceSession(
                     LSTM_MODEL_PATH,
-                    providers=["CPUExecutionProvider"],
+                    providers=self.providers,
                 )
-                print(f"Modelo dinamico cargado: {LSTM_MODEL_PATH}")
+                print(f"Modelo dinamico cargado: {LSTM_MODEL_PATH} | proveedores: {self.dynamic_session.get_providers()}")
             else:
                 print(f"ADVERTENCIA: No se encontro {LSTM_MODEL_PATH}")
 
@@ -62,6 +79,16 @@ class RecognitionService:
 
         except Exception as e:
             print(f"Error cargando modelos: {e}")
+
+    @staticmethod
+    def mirror_landmarks(landmarks: list) -> list:
+        """Refleja la mano en el eje X (mano izquierda <-> derecha).
+
+        Tras normalizar respecto a la muñeca equivale a x -> -x, así que
+        basta con invertir el signo de X en los valores crudos."""
+        arr = np.asarray(landmarks, dtype=np.float32).reshape(-1, 3).copy()
+        arr[:, 0] = -arr[:, 0]
+        return arr.flatten().tolist()
 
     def normalize_landmarks(self, landmarks: list) -> list:
         """Normaliza 21 landmarks respecto a la muneca (landmark 0)."""

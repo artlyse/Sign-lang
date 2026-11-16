@@ -16,10 +16,14 @@ wordfreq
 spylls
 scikit-learn
 # Solo necesario cuando uses PostgreSQL:
-# psycopg[binary]  # descomenta/instala cuando uses PostgreSQL
+# psycopg[binary]  # descomenta/instala cuando uses PostgreSQL 
 email-validator
 torch>=2.10.0
 transformers>=4.51.0
 accelerate>=1.0.0
 safetensors>=0.5.0
 huggingface-hub>=0.34.0
+
+# Reconocimiento facial ArcFace (modelo buffalo_l descargado al primer uso)
+insightface>=0.7.3
+opencv-python-headless>=4.8.0

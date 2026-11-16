@@ -2,7 +2,8 @@
  * Cliente REST del módulo de práctica.
  */
 
-import { authenticatedFetch } from "./auth";
+import { authenticatedFetch, readApiError } from "./auth";
+import type { PersonalModelStatus, TrainingSampleInput } from "./training";
 
 export type PracticeMode = "letter" | "word" | "phrase";
 export type PracticeDifficulty = "beginner" | "intermediate" | "advanced";
@@ -48,6 +49,14 @@ export type PracticeAttemptResult = {
   progress: PracticeProgress;
   level_up: boolean;
   badge: string | null;
+  training?: {
+    saved: number;
+    skipped: number;
+    verified: boolean;
+    reason?: string;
+    language_feedback?: number;
+    personal_model?: PersonalModelStatus;
+  } | null;
 };
 
 export async function getPracticeChallenge(
@@ -66,8 +75,7 @@ export async function getPracticeChallenge(
   );
 
   if (!response.ok) {
-    const detail = await response.json().catch(() => null);
-    throw new Error(detail?.detail ?? "No se pudo generar el ejercicio");
+    throw new Error(await readApiError(response, "No se pudo generar el ejercicio"));
   }
 
   return response.json();
@@ -93,6 +101,7 @@ export async function savePracticeAttempt(payload: {
   recognized_text: string;
   duration_ms: number;
   confidence: number;
+  samples?: TrainingSampleInput[];
 }): Promise<PracticeAttemptResult> {
   const response = await authenticatedFetch("/api/practice/attempt", {
     method: "POST",
@@ -103,8 +112,7 @@ export async function savePracticeAttempt(payload: {
   });
 
   if (!response.ok) {
-    const detail = await response.json().catch(() => null);
-    throw new Error(detail?.detail ?? "No se pudo guardar el intento");
+    throw new Error(await readApiError(response, "No se pudo guardar el intento"));
   }
 
   return response.json();

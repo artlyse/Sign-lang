@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.training import TrainingSampleIn
+
 
 PracticeMode = Literal["letter", "word", "phrase"]
 PracticeDifficulty = Literal["beginner", "intermediate", "advanced"]
@@ -16,6 +18,9 @@ class PracticeAttemptCreate(BaseModel):
     recognized_text: str = Field(default="", max_length=500)
     duration_ms: int = Field(ge=0, le=3_600_000)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    # Landmarks capturados durante el reto. Se guardan como datos de
+    # entrenamiento si el usuario tiene el aprendizaje activado.
+    samples: list[TrainingSampleIn] = Field(default_factory=list, max_length=60)
 
 
 class PracticeAttemptResponse(BaseModel):
@@ -52,3 +57,4 @@ class PracticeAttemptResult(BaseModel):
     progress: PracticeProgressResponse
     level_up: bool
     badge: str | None = None
+    training: dict | None = None

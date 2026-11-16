@@ -76,3 +76,61 @@ def language_health():
         "status": "ok",
         "dictionary": spanish_dictionary_service.status(),
     }
+
+
+from pydantic import BaseModel, Field
+from fastapi import HTTPException
+from fastapi.concurrency import run_in_threadpool
+from app.services.sentence_corrector_service import sentence_corrector_service
+
+class SentenceCorrectionInput(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+    candidate_context: list[dict] = Field(default_factory=list)
+
+
+def _punctuation_fallback(text: str) -> str:
+    """Reglas conservadoras para frases frecuentes cuando Qwen no cambia el texto."""
+    import re
+    value = re.sub(r"\\s+", " ", text.strip())
+    value = value[0].upper() + value[1:] if value else value
+    normalized = value.casefold().strip(" .!?¿¡")
+    if normalized.startswith("hola como estas"):
+        remainder = normalized[len("hola como estas"):]
+        return "Hola, ¿cómo estás?" + (" " + remainder.capitalize() if remainder else "")
+    if normalized.startswith("hola como esta"):
+        remainder = normalized[len("hola como esta"):]
+        return "Hola, ¿cómo está?" + (" " + remainder.capitalize() if remainder else "")
+    question_starts = ("como estas", "como esta", "que tal", "cuanto cuesta", "cuanto es",
+                       "donde esta", "donde queda", "que hora es", "puedes ayudarme",
+                       "cual es", "que necesitas", "que deseas")
+    if any(normalized.startswith(q) for q in question_starts):
+        value = value.rstrip(" .!?¿¡")
+        if not value.startswith("¿"): value = "¿" + value
+        if not value.endswith("?"): value += "?"
+        value = value.replace("Como", "Cómo", 1).replace("como", "cómo", 1) if normalized.startswith("como") else value
+        value = value.replace("Cuanto", "Cuánto", 1).replace("cuanto", "cuánto", 1) if normalized.startswith("cuanto") else value
+        value = value.replace("Donde", "Dónde", 1).replace("donde", "dónde", 1) if normalized.startswith("donde") else value
+        value = value.replace("Cual", "Cuál", 1).replace("cual", "cuál", 1) if normalized.startswith("cual") else value
+        return value
+    if not value.endswith((".", "!", "?")): value += "."
+    return value
+
+
+@router.post("/correct-sentence")
+async def correct_sentence(payload: SentenceCorrectionInput, current_user: User = Depends(get_current_user)):
+    original = payload.text.strip()
+    try:
+        result = await run_in_threadpool(sentence_corrector_service.correct, original, payload.candidate_context)
+        corrected = result.get("corrected") or original
+        # Qwen puede estar deshabilitado/no disponible o no resolver puntuación.
+        fallback = _punctuation_fallback(corrected)
+        if fallback and (not result.get("changed") or corrected == original):
+            corrected = fallback
+        result.update({"original": original, "corrected": corrected,
+                       "changed": corrected.casefold() != original.casefold()})
+        return result
+    except Exception:
+        corrected = _punctuation_fallback(original)
+        return {"original": original, "corrected": corrected,
+                "changed": corrected.casefold() != original.casefold(),
+                "model": "rules-fallback", "device": "cpu", "fallback": True}

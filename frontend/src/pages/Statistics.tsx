@@ -3,6 +3,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { Activity, Gauge, ScanLine, Waves } from "lucide-react";
 import StatCard from "../components/StatCard";
 import {
   loadRecognitionStatistics,
@@ -117,13 +118,15 @@ function Statistics() {
           title="Reconocimientos"
           value={loading ? "—" : stats.totalPredictions}
           description="Últimas 30 sesiones"
-          icon="▦"
+          icon={<ScanLine size={22} />}
+          tone="blue"
         />
         <StatCard
           title="Sesiones"
           value={loading ? "—" : stats.totalSessions}
           description="Sesiones analizadas"
-          icon="◉"
+          icon={<Activity size={22} />}
+          tone="violet"
         />
         <StatCard
           title="Confianza promedio"
@@ -135,13 +138,15 @@ function Statistics() {
                 : "0%"
           }
           description="Sobre predicciones almacenadas"
-          icon="✓"
+          icon={<Gauge size={22} />}
+          tone="green"
         />
         <StatCard
           title="Señas dinámicas"
           value={loading ? "—" : stats.dynamicPredictions}
           description="J, Ñ, Z y otras dinámicas"
-          icon="↝"
+          icon={<Waves size={22} />}
+          tone="orange"
         />
       </div>
 

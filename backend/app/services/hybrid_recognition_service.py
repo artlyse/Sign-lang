@@ -7,6 +7,10 @@ from typing import Deque, Optional, Tuple
 import numpy as np
 
 from app.config import (
+    HAND_MIRROR_AUTO,
+    HAND_ORIENTATION_MIN_VOTES,
+    HAND_ORIENTATION_SWITCH,
+    HAND_ORIENTATION_WINDOW,
     HYBRID_BLOCK_STATIC_DYNAMIC_LETTERS,
     HYBRID_DYNAMIC_CONFIDENCE,
     HYBRID_DYNAMIC_CONFIRMATIONS,
@@ -21,6 +25,7 @@ from app.config import (
     HYBRID_STATIC_VOTE_WINDOW,
 )
 from app.services.recognition_service import recognition_service
+from app.services.training_service import personal_model_service
 
 
 class HybridRecognitionSession:
@@ -35,7 +40,9 @@ class HybridRecognitionSession:
 
     FINGERTIPS = (8, 12, 16, 20)
 
-    def __init__(self):
+    def __init__(self, user_id: Optional[int] = None):
+        # Usuario autenticado: activa el modelo personal aprendido en Práctica.
+        self.user_id = user_id
         self.sequence: Deque[list] = deque(maxlen=HYBRID_SEQUENCE_FRAMES)
         self.dynamic_votes: Deque[Tuple[str, float]] = deque(
             maxlen=HYBRID_DYNAMIC_CONFIRMATIONS
@@ -50,6 +57,40 @@ class HybridRecognitionSession:
         self.locked_letter: Optional[str] = None
         self.locked_confidence = 0.0
         self.lock_frames_remaining = 0
+
+        # Orientación de la mano (original o espejada). No se limpia en reset():
+        # la misma persona suele seguir con la misma mano y, si cambia, la
+        # ventana se adapta en pocos cuadros.
+        self.orientation_votes: Deque[bool] = deque(maxlen=HAND_ORIENTATION_WINDOW)
+        self.use_mirror = False
+
+    def _predict_static_any_hand(self, landmarks: list) -> dict:
+        original = recognition_service.predict_static(landmarks)
+        if not HAND_MIRROR_AUTO or "error" in original:
+            return original
+
+        mirrored = recognition_service.predict_static(
+            recognition_service.mirror_landmarks(landmarks)
+        )
+        if "error" in mirrored:
+            return original
+
+        self.orientation_votes.append(
+            float(mirrored["confidence"]) > float(original["confidence"])
+        )
+        # Histéresis: solo se cambia de orientación con suficientes votos y una
+        # mayoría clara; así unos pocos cuadros dudosos no la hacen oscilar.
+        votes = len(self.orientation_votes)
+        mirror_share = sum(self.orientation_votes) / votes
+        if votes >= HAND_ORIENTATION_MIN_VOTES:
+            if not self.use_mirror and mirror_share >= HAND_ORIENTATION_SWITCH:
+                self.use_mirror = True
+            elif self.use_mirror and mirror_share <= 1 - HAND_ORIENTATION_SWITCH:
+                self.use_mirror = False
+
+        result = dict(mirrored if self.use_mirror else original)
+        result["mirrored"] = self.use_mirror
+        return result
 
     def reset(self):
         self.sequence.clear()
@@ -156,6 +197,7 @@ class HybridRecognitionSession:
             "movement": 0.0,
             "trajectory_spread": 0.0,
             "buffer_frames": len(self.sequence),
+            "personalized": static_result.get("personalized"),
             "static": {
                 "letter": static_result.get("letter", "-"),
                 "confidence": float(static_result.get("confidence", 0.0)),
@@ -199,9 +241,13 @@ class HybridRecognitionSession:
             }
 
         # 1) El estático corre para cada frame recibido.
-        static_result = recognition_service.predict_static(landmarks)
+        static_result = self._predict_static_any_hand(landmarks)
         if "error" in static_result:
             return static_result
+
+        static_result = personal_model_service.adjust(
+            self.user_id, landmarks, static_result
+        )
 
         static_result = self._sanitize_static_result(static_result)
         static_result = self._smooth_static(static_result)
@@ -235,9 +281,13 @@ class HybridRecognitionSession:
                     self.dynamic_votes.clear()
                 elif self.frames_since_dynamic_eval >= HYBRID_DYNAMIC_EVAL_STRIDE:
                     self.frames_since_dynamic_eval = 0
-                    dynamic_result = recognition_service.predict_dynamic(
-                        list(self.sequence)
-                    )
+                    sequence = list(self.sequence)
+                    if HAND_MIRROR_AUTO and self.use_mirror:
+                        sequence = [
+                            recognition_service.mirror_landmarks(frame)
+                            for frame in sequence
+                        ]
+                    dynamic_result = recognition_service.predict_dynamic(sequence)
 
                     if "error" not in dynamic_result:
                         letter = dynamic_result["letter"]
@@ -274,6 +324,7 @@ class HybridRecognitionSession:
             "movement": movement,
             "trajectory_spread": spread,
             "buffer_frames": len(self.sequence),
+            "personalized": static_result.get("personalized"),
             "static": {
                 "letter": static_result.get("letter", "-"),
                 "confidence": float(static_result.get("confidence", 0.0)),

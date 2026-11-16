@@ -38,3 +38,9 @@ def list_models():
         "dynamic_signs": SENAS_DYNAMIC,
         "hybrid": True,
     }
+
+
+@router.get("/device")
+def recognition_device():
+    """Informa si ONNX Runtime pudo activar aceleración CUDA."""
+    return recognition_service.device_status()

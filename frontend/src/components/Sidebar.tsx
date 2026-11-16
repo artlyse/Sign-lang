@@ -1,3 +1,16 @@
+import type { LucideIcon } from "lucide-react";
+import {
+  BarChart3,
+  Hand,
+  HelpCircle,
+  LayoutDashboard,
+  LayoutTemplate,
+  LogOut,
+  ScanLine,
+  Settings,
+  Target,
+} from "lucide-react";
+
 type Page =
   | "dashboard"
   | "translator"
@@ -17,6 +30,25 @@ interface SidebarProps {
   displayName: string;
 }
 
+interface NavItem {
+  page: Page;
+  label: string;
+  icon: LucideIcon;
+}
+
+const MAIN_ITEMS: NavItem[] = [
+  { page: "dashboard", label: "Inicio", icon: LayoutDashboard },
+  { page: "translator", label: "Traductor", icon: ScanLine },
+  { page: "practice", label: "Práctica", icon: Target },
+  { page: "templates", label: "Plantillas", icon: LayoutTemplate },
+  { page: "statistics", label: "Estadísticas", icon: BarChart3 },
+];
+
+const SECONDARY_ITEMS: NavItem[] = [
+  { page: "help", label: "Ayuda", icon: HelpCircle },
+  { page: "settings", label: "Configuración", icon: Settings },
+];
+
 function Sidebar({
   currentPage,
   onNavigate,
@@ -35,8 +67,6 @@ function Sidebar({
     }
   };
 
-  // Usamos el nombre visible para generar las iniciales.
-  // Si no existe, usamos el username.
   const nameForInitials = displayName || username;
 
   const initials = nameForInitials
@@ -49,113 +79,51 @@ function Sidebar({
         .toUpperCase()
     : "US";
 
+  const renderItem = ({ page, label, icon: Icon }: NavItem) => (
+    <button
+      key={page}
+      className={currentPage === page ? "active" : ""}
+      onClick={() => navigate(page)}
+    >
+      <span className="nav-icon">
+        <Icon size={19} strokeWidth={2} />
+      </span>
+      {label}
+    </button>
+  );
+
   return (
     <>
-      {open && (
-        <div
-          className="sidebar-overlay"
-          onClick={onClose}
-        />
-      )}
+      {open && <div className="sidebar-overlay" onClick={onClose} />}
 
       <aside className={`sidebar ${open ? "open" : ""}`}>
-        {/* LOGO */}
         <div className="sidebar-brand">
-          <div className="brand-icon"></div>
+          <div className="brand-icon">
+            <Hand size={22} strokeWidth={2.2} />
+          </div>
 
           <div>
-            <h2>Sing-lang</h2>
-            <span>Sistema inteligente</span>
+            <h2>Sign-lang</h2>
+            <span>Traductor LSP con IA</span>
           </div>
         </div>
 
-        {/* MENÚ */}
         <nav className="sidebar-menu">
-          <button
-            className={
-              currentPage === "dashboard" ? "active" : ""
-            }
-            onClick={() => navigate("dashboard")}
-          >
-            <span>⌂</span>
-            Inicio
-          </button>
-
-          <button
-            className={
-              currentPage === "translator" ? "active" : ""
-            }
-            onClick={() => navigate("translator")}
-          >
-            <span>✋</span>
-            Traductor
-          </button>
-
-          <button
-            className={
-              currentPage === "practice" ? "active" : ""
-            }
-            onClick={() => navigate("practice")}
-          >
-            <span>◎</span>
-            Práctica
-          </button>
-
-          <button
-            className={
-              currentPage === "templates" ? "active" : ""
-            }
-            onClick={() => navigate("templates")}
-          >
-            <span>▤</span>
-            Plantillas
-          </button>
-
-          <button
-            className={
-              currentPage === "statistics" ? "active" : ""
-            }
-            onClick={() => navigate("statistics")}
-          >
-            <span>▥</span>
-            Estadísticas
-          </button>
+          <small className="sidebar-section-label">Menú</small>
+          {MAIN_ITEMS.map(renderItem)}
 
           <div className="sidebar-divider" />
 
-          <button
-            className={
-              currentPage === "help" ? "active" : ""
-            }
-            onClick={() => navigate("help")}
-          >
-            <span>?</span>
-            Ayuda
-          </button>
-
-          <button
-            className={
-              currentPage === "settings" ? "active" : ""
-            }
-            onClick={() => navigate("settings")}
-          >
-            <span>⚙</span>
-            Configuración
-          </button>
+          <small className="sidebar-section-label">Soporte</small>
+          {SECONDARY_ITEMS.map(renderItem)}
         </nav>
 
-        {/* USUARIO */}
         <div className="sidebar-user">
-          <div className="user-avatar">
-            {initials}
-          </div>
+          <div className="user-avatar">{initials}</div>
 
           <div className="sidebar-user-info">
-            <strong>
-              {displayName || username || "Usuario"}
-            </strong>
-
-            <span>{username || "Operador"}</span>
+            <strong>{displayName || username || "Usuario"}</strong>
+            <span>@{username || "operador"}</span>
           </div>
 
           <button
@@ -165,7 +133,7 @@ function Sidebar({
             title="Cerrar sesión"
             aria-label="Cerrar sesión"
           >
-            ↪
+            <LogOut size={17} />
           </button>
         </div>
       </aside>

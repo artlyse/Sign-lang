@@ -6,3 +6,7 @@ data/app.db
 data/app.db-shm
 data/app.db-wal
 app/ml/*.joblib
+storage/faces/*
+storage/gestures/*
+!storage/faces/.gitkeep
+!storage/gestures/.gitkeep

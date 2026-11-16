@@ -7,7 +7,10 @@ from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.models.user_profile import UserProfile
+from app.models.training import UserPreference
+from app.schemas.training import PreferencesIn
 from app.schemas.user import UserProfileResponse, UserProfileUpdate
+import json
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -43,3 +46,33 @@ def update_my_profile(
     db.commit()
     db.refresh(profile)
     return profile
+
+
+@router.get("/me/preferences")
+def get_my_preferences(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    row = db.get(UserPreference, current_user.id)
+    try:
+        data = json.loads(row.data_json) if row else {}
+    except ValueError:
+        data = {}
+    return {"data": data}
+
+
+@router.put("/me/preferences")
+def save_my_preferences(
+    payload: PreferencesIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    raw = json.dumps(payload.data)[:8000]
+    row = db.get(UserPreference, current_user.id)
+    if row is None:
+        row = UserPreference(user_id=current_user.id, data_json=raw)
+        db.add(row)
+    else:
+        row.data_json = raw
+    db.commit()
+    return {"data": payload.data}

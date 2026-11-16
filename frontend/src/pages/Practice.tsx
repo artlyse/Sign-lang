@@ -24,6 +24,43 @@ import type {
 } from "../services/practice";
 import useTextToSpeech from "../hooks/useTextToSpeech";
 import {
+  BrainCircuit,
+  Camera,
+  CaseUpper,
+  Check,
+  CheckCircle2,
+  Flame,
+  Hand,
+  History,
+  Loader2,
+  Medal,
+  MessageSquareText,
+  Play,
+  RotateCcw,
+  Shuffle,
+  Sparkles,
+  Square,
+  Target,
+  Timer,
+  Users,
+  Volume2,
+  WholeWord,
+} from "lucide-react";
+import {
+  confirmAttemptSamples,
+  deleteTrainingSamples,
+  DYNAMIC_SIGNS,
+  exportTrainingDataset,
+  getTrainingStats,
+} from "../services/training";
+import type {
+  TrainingSampleInput,
+  TrainingStats,
+} from "../services/training";
+import TrainingPanel from "../components/TrainingPanel";
+import SignReference from "../components/SignReference";
+import { clearSignReferenceCache } from "../services/training";
+import {
   buildWordFrameFeatures,
   drawPoseLandmarks,
   POSE_MODEL_URL,
@@ -79,6 +116,73 @@ function normalize(value: string) {
     .trim();
 }
 
+const LOCAL_LIBRARY: Record<PracticeMode, Record<PracticeDifficulty, string[]>> = {
+  letter: {
+    beginner: "AEILMNOSTU".split(""),
+    intermediate: "BCDFGHKPRV".split(""),
+    advanced: ["J", "Ñ", "Q", "W", "X", "Y", "Z"],
+  },
+  word: {
+    beginner: ["HOLA", "CASA", "AGUA", "AMOR", "MANO", "DIA", "MAMA", "PAPA", "AMIGO", "GRACIAS"],
+    intermediate: ["FAMILIA", "ESCUELA", "TRABAJO", "COMIDA", "TIEMPO", "PERSONA", "SALUD", "CAMINO", "CIUDAD", "AYUDA"],
+    advanced: ["COMUNICACION", "APRENDIZAJE", "UNIVERSIDAD", "TECNOLOGIA", "EXPERIENCIA", "DESARROLLO", "INFORMACION"],
+  },
+  phrase: {
+    beginner: ["HOLA COMO ESTAS", "BUENOS DIAS AMIGO", "QUIERO TOMAR AGUA", "GRACIAS POR TU AYUDA"],
+    intermediate: ["HOLA COMO ESTAN TODOS", "QUIERO APRENDER LENGUA DE SEÑAS", "GRACIAS POR AYUDARME CON ESTO"],
+    advanced: ["LA COMUNICACION ACCESIBLE MEJORA LA EXPERIENCIA DE TODOS", "EL APRENDIZAJE CONSTANTE AYUDA A MEJORAR LA FLUIDEZ"],
+  },
+};
+
+const ALPHABET = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ".split("");
+
+const DIFFICULTY_LABEL: Record<PracticeDifficulty, string> = {
+  beginner: "Inicial",
+  intermediate: "Intermedio",
+  advanced: "Avanzado",
+};
+
+function pickLocalChallenge(
+  mode: PracticeMode,
+  difficulty: PracticeDifficulty,
+  previous = "",
+) {
+  const options = LOCAL_LIBRARY[mode][difficulty].filter((item) => item !== previous);
+  return options[Math.floor(Math.random() * options.length)] ?? previous;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error("Tiempo de espera agotado")), ms);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+type BufferedFrame = {
+  t: number;
+  landmarks: number[];
+  predicted?: string;
+  confidence?: number;
+};
+
+const FRAME_BUFFER_SIZE = 120; // ~4 s a 30 FPS
+const MAX_STATIC_SAMPLES = 8;
+
+function pickEvenly<T>(items: T[], count: number): T[] {
+  if (items.length <= count) return items;
+  const step = (items.length - 1) / (count - 1);
+  return Array.from({ length: count }, (_, i) => items[Math.round(i * step)]);
+}
+
 function formatDuration(ms: number) {
   const seconds = Math.max(0, ms) / 1000;
   return `${seconds.toFixed(1)} s`;
@@ -101,6 +205,9 @@ function Practice() {
   const confidenceSumRef = useRef(0);
   const confidenceCountRef = useRef(0);
   const recognitionEngineRef = useRef<"letter" | "word">("letter");
+  // Landmarks capturados durante el reto para entrenar el modelo.
+  const frameBufferRef = useRef<BufferedFrame[]>([]);
+  const letterSamplesRef = useRef<TrainingSampleInput[]>([]);
 
   const [mode, setMode] = useState<PracticeMode>("letter");
   const [difficulty, setDifficulty] =
@@ -129,6 +236,16 @@ function Practice() {
   const [recentAttempts, setRecentAttempts] =
     useState<PracticeAttempt[]>([]);
   const [error, setError] = useState("");
+
+  const [contribute, setContribute] = useState(
+    () => localStorage.getItem("practice_contribute") !== "false",
+  );
+  const contributeRef = useRef(contribute);
+  const [personalized, setPersonalized] = useState(false);
+  const [trainingStats, setTrainingStats] = useState<TrainingStats | null>(null);
+  const [trainingBusy, setTrainingBusy] = useState(false);
+  const [trainingMessage, setTrainingMessage] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
 
   const { speak, supported: ttsSupported } = useTextToSpeech();
 
@@ -206,34 +323,167 @@ function Practice() {
       });
   }, []);
 
-  const loadChallenge = async (
-    nextMode = mode,
-    nextDifficulty = difficulty,
-  ) => {
-    setLoadingChallenge(true);
+  const refreshTrainingStats = () =>
+    getTrainingStats()
+      .then((stats) => {
+        clearSignReferenceCache(); // las nuevas muestras cambian la referencia
+        setTrainingStats(stats);
+      })
+      .catch((err) => console.warn("Sin estadísticas de entrenamiento:", err));
+
+  useEffect(() => {
+    refreshTrainingStats();
+  }, []);
+
+  useEffect(() => {
+    contributeRef.current = contribute;
+    localStorage.setItem("practice_contribute", String(contribute));
+  }, [contribute]);
+
+  const buildSamples = (): TrainingSampleInput[] => {
+    if (!contributeRef.current || recognitionEngine !== "letter") return [];
+
+    if (mode !== "letter") {
+      return letterSamplesRef.current.slice(0, 40);
+    }
+
+    const label = normalize(target);
+    const frames = frameBufferRef.current;
+    if (!label || !frames.length) return [];
+    const lastT = frames[frames.length - 1].t;
+
+    if (DYNAMIC_SIGNS.includes(label)) {
+      // Secuencia de 30 frames de los últimos ~2.5 s (formato del LSTM).
+      const window = frames.filter((f) => f.t >= lastT - 2500);
+      if (window.length < 15) return [];
+      return [
+        {
+          label,
+          kind: "dynamic",
+          sequence: Array.from(
+            { length: 30 },
+            (_, i) => window[Math.round((i * (window.length - 1)) / 29)].landmarks,
+          ),
+          predicted_label: currentLetter,
+          confidence,
+        },
+      ];
+    }
+
+    // Seña estática: varias tomas de los últimos ~1.5 s.
+    const recent = frames.filter((f) => f.t >= lastT - 1500);
+    return pickEvenly(recent, MAX_STATIC_SAMPLES).map((f) => ({
+      label,
+      kind: "static" as const,
+      landmarks: f.landmarks,
+      predicted_label: f.predicted ?? null,
+      confidence: f.confidence ?? 0,
+    }));
+  };
+
+  const confirmSamples = async () => {
+    if (!result) return;
+    setTrainingBusy(true);
+    try {
+      const response = await confirmAttemptSamples(result.attempt.id);
+      setTrainingStats(response.stats);
+      setConfirmed(true);
+      setTrainingMessage(
+        `${response.verified} muestras de "${result.attempt.target_text}" añadidas a tu modelo.`,
+      );
+    } catch (err) {
+      setTrainingMessage(err instanceof Error ? err.message : "No se pudo confirmar.");
+    } finally {
+      setTrainingBusy(false);
+    }
+  };
+
+  const exportDataset = async () => {
+    setTrainingBusy(true);
+    try {
+      const response = await exportTrainingDataset();
+      setTrainingMessage(
+        response.exported
+          ? `${response.exported} muestras exportadas a ${response.dataset_dir}. Ejecuta los scripts de ai-training/training para reentrenar.`
+          : "No hay muestras nuevas verificadas para exportar.",
+      );
+      refreshTrainingStats();
+    } catch (err) {
+      setTrainingMessage(err instanceof Error ? err.message : "No se pudo exportar.");
+    } finally {
+      setTrainingBusy(false);
+    }
+  };
+
+  const resetSamples = async (label?: string) => {
+    const question = label
+      ? `¿Borrar tus muestras de "${label}"?`
+      : "¿Borrar todas tus muestras de entrenamiento?";
+    if (!window.confirm(question)) return;
+    setTrainingBusy(true);
+    try {
+      const response = await deleteTrainingSamples(label);
+      setTrainingStats(response.stats);
+      setTrainingMessage(`${response.deleted} muestras eliminadas.`);
+    } catch (err) {
+      setTrainingMessage(err instanceof Error ? err.message : "No se pudo borrar.");
+    } finally {
+      setTrainingBusy(false);
+    }
+  };
+
+  const challengeRequestRef = useRef(0);
+
+  const resetForChallenge = () => {
     setError("");
     setResult(null);
     setRecognizedText("");
     setCurrentLetter("-");
+    setElapsedMs(0);
     sendCommand({ mode: "clear_language" });
+  };
 
+  const loadChallenge = async (
+    nextMode = mode,
+    nextDifficulty = difficulty,
+  ) => {
+    const requestId = ++challengeRequestRef.current;
+    resetForChallenge();
+
+    // Letras: se eligen al instante, sin depender del backend.
+    if (nextMode === "letter") {
+      setTarget((previous) => pickLocalChallenge("letter", nextDifficulty, previous));
+      setChallengeSource("library");
+      setLoadingChallenge(false);
+      return;
+    }
+
+    setLoadingChallenge(true);
     try {
-      const challenge = await getPracticeChallenge(
-        nextMode,
-        nextDifficulty,
-        true,
+      const challenge = await withTimeout(
+        getPracticeChallenge(nextMode, nextDifficulty, nextMode === "phrase"),
+        nextMode === "phrase" ? 9000 : 4000,
       );
+      if (requestId !== challengeRequestRef.current) return;
       setTarget(challenge.text);
       setChallengeSource(challenge.source);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "No se pudo generar el reto.",
-      );
+      if (requestId !== challengeRequestRef.current) return;
+      console.warn("Reto local por fallo del backend:", err);
+      setTarget((previous) => pickLocalChallenge(nextMode, nextDifficulty, previous));
+      setChallengeSource("local");
     } finally {
-      setLoadingChallenge(false);
+      if (requestId === challengeRequestRef.current) setLoadingChallenge(false);
     }
+  };
+
+  const chooseLetter = (letter: string) => {
+    if (active) return;
+    challengeRequestRef.current += 1;
+    resetForChallenge();
+    setLoadingChallenge(false);
+    setChallengeSource("manual");
+    setTarget(letter);
   };
 
   useEffect(() => {
@@ -335,6 +585,12 @@ function Practice() {
                     lm.z,
                   ]);
 
+                  if (activeRef.current && contributeRef.current) {
+                    const buffer = frameBufferRef.current;
+                    buffer.push({ t: now, landmarks });
+                    if (buffer.length > FRAME_BUFFER_SIZE) buffer.shift();
+                  }
+
                   wsRef.current.send(
                     JSON.stringify({
                       mode: "hybrid",
@@ -389,6 +645,13 @@ function Practice() {
                 setCurrentLetter(String(data.letter));
                 const value = Number(data.confidence ?? 0);
                 setConfidence(value);
+                setPersonalized(Boolean(data.personalized?.changed));
+
+                const last = frameBufferRef.current.at(-1);
+                if (last && last.predicted === undefined) {
+                  last.predicted = String(data.letter);
+                  last.confidence = value;
+                }
 
                 if (activeRef.current) {
                   confidenceSumRef.current += value;
@@ -417,6 +680,30 @@ function Practice() {
               const state = data.language as LanguageState;
               const text = displayRecognized(state);
               setRecognizedText(text);
+
+              if (
+                state.event?.type === "letter_added" &&
+                activeRef.current &&
+                contributeRef.current
+              ) {
+                // En palabras/frases cada letra aceptada aporta una muestra.
+                const letter = String(state.event.letter ?? "").toUpperCase();
+                const frame = frameBufferRef.current.at(-1);
+                if (
+                  frame &&
+                  letter &&
+                  !DYNAMIC_SIGNS.includes(letter) &&
+                  letterSamplesRef.current.length < 40
+                ) {
+                  letterSamplesRef.current.push({
+                    label: letter,
+                    kind: "static",
+                    landmarks: frame.landmarks,
+                    predicted_label: letter,
+                    confidence: Number(state.event.confidence ?? 0),
+                  });
+                }
+              }
 
               if (
                 state.event?.type === "letter_added" ||
@@ -568,6 +855,10 @@ function Practice() {
     setElapsedMs(0);
     confidenceSumRef.current = 0;
     confidenceCountRef.current = 0;
+    frameBufferRef.current = [];
+    letterSamplesRef.current = [];
+    setConfirmed(false);
+    setTrainingMessage("");
     startAtRef.current = performance.now();
     activeRef.current = true;
     sendCommand({ mode: "clear_language" });
@@ -605,9 +896,11 @@ function Practice() {
         recognized_text: recognized,
         duration_ms: duration,
         confidence: Math.min(1, Math.max(0, averageConfidence)),
+        samples: buildSamples(),
       });
 
       setResult(payload);
+      if (payload.training?.saved) refreshTrainingStats();
       setProgress(payload.progress);
       setRecentAttempts((previous) => [
         payload.attempt,
@@ -644,91 +937,110 @@ function Practice() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, target, currentLetter, recognizedText, mode, recognitionEngine]);
 
-  const modeTitle = {
-    letter: "Letra",
-    word: "Palabra",
-    phrase: "Frase IA",
-  }[mode];
+  // Letras del objetivo y la siguiente que toca hacer.
+  const targetLetters = normalize(target).replace(/[^A-ZÑ]/g, "").split("");
+  const doneLetters = normalize(
+    recognizedText || (currentLetter !== "-" ? currentLetter : ""),
+  ).replace(/[^A-ZÑ]/g, "");
+  let nextLetterIndex = 0;
+  while (
+    nextLetterIndex < targetLetters.length &&
+    doneLetters[nextLetterIndex] === targetLetters[nextLetterIndex]
+  ) {
+    nextLetterIndex += 1;
+  }
+
+  const readyLetters = new Set(trainingStats?.personal_model.active_labels ?? []);
+  const targetClass =
+    mode === "letter" ? "letter" : target.length > 18 ? "phrase" : "word";
+  const sourceLabel: Record<string, string> = {
+    qwen: "Frase generada con IA",
+    library: "Biblioteca",
+    fallback: "Biblioteca (IA no disponible)",
+    local: "Biblioteca local",
+    manual: "Elegida por ti",
+  };
 
   return (
-    <div className="page practice-page">
-      <div className="page-heading">
-        <div>
-          <h2>Práctica</h2>
-          <p>
-            Entrena precisión, velocidad y fluidez con retos progresivos.
-          </p>
-        </div>
-
-        <div className={`translator-status ${connected ? "connected" : ""}`}>
-          <span />
-          {connected ? "Reconocimiento conectado" : "Backend desconectado"}
-        </div>
-      </div>
-
-      <div className="practice-progress-grid">
-        <div className="practice-progress-card level">
-          <span>Nivel</span>
-          <strong>{progress.level}</strong>
-          <div className="practice-xp-track">
-            <div
-              style={{ width: `${Math.min(progress.level_progress, 100)}%` }}
-            />
+    <div className="page practice-page pr">
+      <div className="pr-stats">
+        <div className="pr-stat">
+          <Medal size={18} />
+          <div>
+            <small>Nivel {progress.level}</small>
+            <div className="pr-xp">
+              <i style={{ width: `${Math.min(progress.level_progress, 100)}%` }} />
+            </div>
+            <em>{progress.level_xp}/{progress.next_level_xp} XP</em>
           </div>
-          <small>
-            {progress.level_xp} / {progress.next_level_xp} XP
-          </small>
         </div>
-
-        <div className="practice-progress-card">
-          <span>XP total</span>
-          <strong>{progress.total_xp}</strong>
-          <small>Experiencia acumulada</small>
+        <div className="pr-stat">
+          <Sparkles size={18} />
+          <div>
+            <small>XP total</small>
+            <strong>{progress.total_xp}</strong>
+          </div>
         </div>
-
-        <div className="practice-progress-card">
-          <span>Racha</span>
-          <strong>{progress.current_streak}</strong>
-          <small>Récord: {progress.best_streak}</small>
+        <div className="pr-stat">
+          <Flame size={18} />
+          <div>
+            <small>Racha</small>
+            <strong>{progress.current_streak}</strong>
+            <em>récord {progress.best_streak}</em>
+          </div>
         </div>
-
-        <div className="practice-progress-card">
-          <span>Precisión media</span>
-          <strong>{progress.average_accuracy.toFixed(1)}%</strong>
-          <small>Mejor: {progress.best_accuracy.toFixed(1)}%</small>
+        <div className="pr-stat">
+          <Target size={18} />
+          <div>
+            <small>Precisión media</small>
+            <strong>{progress.average_accuracy.toFixed(1)}%</strong>
+          </div>
         </div>
       </div>
 
-      <section className="panel practice-control-panel">
-        <div className="practice-mode-tabs">
-          {(["letter", "word", "phrase"] as PracticeMode[]).map((item) => (
+      <div className="pr-toolbar">
+        <div className="pr-seg" role="group" aria-label="Tipo de reto">
+          {(
+            [
+              ["letter", "Letra", CaseUpper],
+              ["word", "Palabra", WholeWord],
+              ["phrase", "Frase IA", MessageSquareText],
+            ] as Array<[PracticeMode, string, typeof CaseUpper]>
+          ).map(([value, label, Icon]) => (
             <button
               type="button"
-              key={item}
-              className={mode === item ? "active" : ""}
-              onClick={() => {
-                if (!active) setMode(item);
-              }}
+              key={value}
+              className={mode === value ? "active" : ""}
+              onClick={() => !active && setMode(value)}
               disabled={active}
             >
-              {item === "letter"
-                ? "Letra"
-                : item === "word"
-                  ? "Palabra"
-                  : "Frase IA"}
+              <Icon size={15} /> {label}
             </button>
           ))}
         </div>
 
-        <div className="practice-recognition-engine">
-          <span>Reconocimiento</span>
+        <div className="pr-seg" role="group" aria-label="Dificultad">
+          {(Object.keys(DIFFICULTY_LABEL) as PracticeDifficulty[]).map((value) => (
+            <button
+              type="button"
+              key={value}
+              className={difficulty === value ? "active" : ""}
+              onClick={() => !active && setDifficulty(value)}
+              disabled={active}
+            >
+              {DIFFICULTY_LABEL[value]}
+            </button>
+          ))}
+        </div>
+
+        <div className="pr-seg" role="group" aria-label="Reconocimiento">
           <button
             type="button"
             className={recognitionEngine === "letter" ? "active" : ""}
             onClick={() => !active && setRecognitionEngine("letter")}
             disabled={active}
           >
-            Por letras
+            <Hand size={15} /> Por letras
           </button>
           <button
             type="button"
@@ -741,240 +1053,263 @@ function Practice() {
                 : "Reconoce cada seña como una palabra completa"
             }
           >
-            Por palabras
+            <Users size={15} /> Por palabras
           </button>
         </div>
 
-        <div className="practice-difficulty">
-          <span>Dificultad</span>
-          {(
-            [
-              ["beginner", "Inicial"],
-              ["intermediate", "Intermedio"],
-              ["advanced", "Avanzado"],
-            ] as Array<[PracticeDifficulty, string]>
-          ).map(([value, label]) => (
-            <button
-              type="button"
-              key={value}
-              className={difficulty === value ? "active" : ""}
-              onClick={() => {
-                if (!active) setDifficulty(value);
-              }}
-              disabled={active}
-            >
-              {label}
-            </button>
-          ))}
+        <div className={`pr-status ${connected ? "ok" : ""}`}>
+          <span />
+          {connected ? "Reconocimiento conectado" : "Conectando reconocimiento..."}
         </div>
-      </section>
+      </div>
 
-      <div className="practice-grid">
-        <section className="panel practice-challenge-panel">
-          <div className="practice-eyebrow">
-            {modeTitle} · {difficulty}
+      <div className="pr-main">
+        <section className="pr-card pr-challenge">
+          <div className="pr-card-head">
+            <span className="pr-eyebrow">
+              {mode === "letter" ? "Letra" : mode === "word" ? "Palabra" : "Frase"} ·{" "}
+              {DIFFICULTY_LABEL[difficulty]}
+            </span>
+            <span className="pr-timer">
+              <Timer size={14} /> {formatDuration(elapsedMs)}
+            </span>
           </div>
 
-          <h3>Objetivo</h3>
+          <div className={`pr-challenge-body ${mode === "letter" ? "split" : ""}`}>
+            <div className={`pr-target ${targetClass}`}>
+              {loadingChallenge ? (
+                <span className="pr-loading">
+                  <Loader2 size={18} className="spin" /> Preparando reto...
+                </span>
+              ) : (
+                target || "-"
+              )}
+            </div>
 
-          <div className={`practice-target ${mode}`}>
-            {loadingChallenge ? "Generando..." : target || "-"}
-          </div>
-
-          <div className="practice-target-meta">
-            {mode === "phrase" && (
-              <span>
-                Fuente: {challengeSource === "qwen" ? "Qwen local" : "biblioteca"}
-              </span>
+            {mode === "letter" && !loadingChallenge && targetLetters[0] && (
+              <SignReference label={targetLetters[0]} size={150} />
             )}
-            <span>Tiempo: {formatDuration(elapsedMs)}</span>
           </div>
 
-          <div className="practice-actions">
+          {mode !== "letter" && !loadingChallenge && targetLetters.length > 0 && (
+            <div className="pr-strip">
+              {targetLetters.slice(0, 24).map((letter, index) => (
+                <SignReference
+                  key={`${letter}-${index}`}
+                  label={letter}
+                  size={64}
+                  compact
+                  active={active && index === nextLetterIndex}
+                />
+              ))}
+            </div>
+          )}
+
+          {challengeSource && !loadingChallenge && (
+            <small className="pr-source">{sourceLabel[challengeSource] ?? challengeSource}</small>
+          )}
+
+          <div className="pr-actions">
             <button
               type="button"
+              className="pr-btn ghost"
               onClick={() => loadChallenge()}
               disabled={loadingChallenge || active}
             >
-              {mode === "phrase" ? "Nueva frase IA" : "Nuevo reto"}
+              <Shuffle size={16} /> {mode === "letter" ? "Letra al azar" : "Nuevo reto"}
             </button>
-
             <button
               type="button"
+              className="pr-btn ghost"
               onClick={() => speak(target)}
               disabled={!ttsSupported || !target}
             >
-              Escuchar objetivo
+              <Volume2 size={16} /> Escuchar
             </button>
-
             {!active ? (
               <button
                 type="button"
-                className="translator-primary-button"
+                className="pr-btn primary"
                 onClick={startAttempt}
                 disabled={!target || loadingChallenge}
               >
-                Iniciar reto
+                <Play size={16} /> Iniciar reto
               </button>
             ) : (
               <button
                 type="button"
-                className="translator-primary-button"
+                className="pr-btn danger"
                 onClick={finishAttempt}
                 disabled={saving}
               >
+                {saving ? <Loader2 size={16} className="spin" /> : <Square size={16} />}
                 {saving ? "Evaluando..." : "Terminar y evaluar"}
               </button>
             )}
           </div>
+
+          {mode === "letter" && (
+            <div className="pr-alphabet" aria-label="Elige la letra que quieres aprender">
+              <span>Elige la letra que quieres aprender</span>
+              {ALPHABET.map((letter) => (
+                <button
+                  type="button"
+                  key={letter}
+                  className={`${target === letter ? "active" : ""} ${readyLetters.has(letter) ? "ready" : ""}`}
+                  onClick={() => chooseLetter(letter)}
+                  disabled={active}
+                  title={readyLetters.has(letter) ? "Tu modelo personal ya aprendió esta letra" : undefined}
+                >
+                  {letter}
+                </button>
+              ))}
+            </div>
+          )}
         </section>
 
-        <section className="panel practice-camera-panel">
-          <div className="translator-panel-title">
-            <div>
-              <h3>Cámara</h3>
-              <p>{cameraStatus}</p>
-            </div>
-            <span className="camera-live">{active ? "RETO ACTIVO" : "LISTA"}</span>
+        <section className="pr-card pr-camera">
+          <div className="pr-card-head">
+            <span className="pr-eyebrow">
+              <Camera size={14} /> {cameraStatus}
+            </span>
+            <span className={`pr-live-badge ${active ? "on" : ""}`}>
+              {active ? "Reto activo" : "Lista"}
+            </span>
           </div>
 
-          <div className="camera-controls practice-camera-controls">
-            <div className="camera-selector">
-              <label htmlFor="practice-camera-select">Cámara</label>
-              <select
-                id="practice-camera-select"
-                value={selectedCamera}
-                onChange={(event) => changeCamera(event.target.value)}
-                disabled={active}
-              >
-                {cameras.map((camera, index) => (
-                  <option key={camera.deviceId} value={camera.deviceId}>
-                    {camera.label || `Cámara ${index + 1}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="practice-engine-badge">
-              {recognitionEngine === "word"
-                ? "2 manos + brazos / pose"
-                : "MLP + LSTM de letras"}
-            </div>
+          <div className="pr-camera-controls">
+            <select
+              value={selectedCamera}
+              onChange={(event) => changeCamera(event.target.value)}
+              disabled={active}
+              aria-label="Cámara"
+            >
+              {cameras.map((camera, index) => (
+                <option key={camera.deviceId} value={camera.deviceId}>
+                  {camera.label || `Cámara ${index + 1}`}
+                </option>
+              ))}
+            </select>
+            <span className="pr-engine">
+              {recognitionEngine === "word" ? "Manos + pose" : "MLP + LSTM"}
+            </span>
           </div>
 
-          <div className="translator-camera">
+          <div className="translator-camera pr-video">
             <video ref={videoRef} autoPlay playsInline muted />
             <canvas ref={canvasRef} width={640} height={480} />
+
+            <div className="pr-overlay">
+              <div>
+                <small>{recognitionEngine === "word" ? "Palabra" : "Seña"}</small>
+                <strong>{currentLetter}</strong>
+              </div>
+              <div>
+                <small>Confianza</small>
+                <strong>{(confidence * 100).toFixed(0)}%</strong>
+              </div>
+              {personalized && <em>Ajustado por tu modelo</em>}
+            </div>
           </div>
 
-          <div className="practice-live-result">
-            <div>
-              <span>{recognitionEngine === "word" ? "Palabra actual" : "Seña actual"}</span>
-              <strong>{currentLetter}</strong>
-            </div>
-            <div>
-              <span>Confianza</span>
-              <strong>{(confidence * 100).toFixed(1)}%</strong>
-            </div>
-          </div>
-
-          <div className="practice-recognized-box">
-            <span>Reconocido durante el reto</span>
-            <strong>
-              {recognizedText ||
-                (currentLetter !== "-" ? currentLetter : "-")}
-            </strong>
+          <div className="pr-recognized">
+            <small>Reconocido</small>
+            <strong>{recognizedText || (currentLetter !== "-" ? currentLetter : "—")}</strong>
           </div>
         </section>
       </div>
 
+      {error && <div className="language-event-message error">{error}</div>}
+
       {result && (
-        <section
-          className={`panel practice-result ${
-            result.attempt.success ? "success" : "retry"
-          }`}
-        >
-          <div>
-            <span>Resultado</span>
-            <h3>
-              {result.attempt.success
-                ? "Reto completado"
-                : "Sigue practicando"}
-            </h3>
+        <section className={`pr-card pr-result ${result.attempt.success ? "success" : "retry"}`}>
+          <div className="pr-result-title">
+            {result.attempt.success ? <CheckCircle2 size={22} /> : <RotateCcw size={22} />}
+            <div>
+              <strong>{result.attempt.success ? "¡Reto completado!" : "Sigue practicando"}</strong>
+              <small>
+                Objetivo <b>{result.attempt.target_text}</b> · Reconocido{" "}
+                <b>{result.attempt.recognized_text || "—"}</b>
+              </small>
+            </div>
+            {result.badge && <span className="pr-badge">{result.badge}</span>}
           </div>
 
-          <div className="practice-result-metrics">
-            <div>
-              <span>Precisión</span>
-              <strong>{result.attempt.accuracy.toFixed(1)}%</strong>
-            </div>
-            <div>
-              <span>Tiempo</span>
-              <strong>{formatDuration(result.attempt.duration_ms)}</strong>
-            </div>
-            <div>
-              <span>XP</span>
-              <strong>+{result.attempt.xp_earned}</strong>
-            </div>
-            <div>
-              <span>Racha</span>
-              <strong>{result.progress.current_streak}</strong>
-            </div>
+          <div className="pr-result-metrics">
+            <div><small>Precisión</small><strong>{result.attempt.accuracy.toFixed(1)}%</strong></div>
+            <div><small>Tiempo</small><strong>{formatDuration(result.attempt.duration_ms)}</strong></div>
+            <div><small>XP</small><strong>+{result.attempt.xp_earned}</strong></div>
+            <div><small>Racha</small><strong>{result.progress.current_streak}</strong></div>
           </div>
 
-          {result.badge && (
-            <div className="practice-badge">{result.badge}</div>
+          {result.training && (
+            <div className="pr-result-training">
+              {result.training.saved > 0 ? (
+                <span>
+                  <BrainCircuit size={15} /> {result.training.saved} muestras guardadas
+                  {result.training.verified || confirmed
+                    ? " y añadidas a tu modelo personal."
+                    : " como pendientes."}
+                </span>
+              ) : result.training.reason ? (
+                <span>Muestras no guardadas: {result.training.reason}.</span>
+              ) : null}
+              {Boolean(result.training.language_feedback) && (
+                <span>
+                  El corrector aprendió {result.training.language_feedback} palabra(s).
+                </span>
+              )}
+              {!result.attempt.success &&
+                !confirmed &&
+                result.training.saved > 0 &&
+                result.attempt.mode === "letter" && (
+                  <button
+                    type="button"
+                    className="pr-btn ghost small"
+                    onClick={confirmSamples}
+                    disabled={trainingBusy}
+                  >
+                    <Check size={15} /> Mi seña era correcta
+                  </button>
+                )}
+            </div>
           )}
-
-          <div className="practice-result-comparison">
-            <div>
-              <span>Objetivo</span>
-              <strong>{result.attempt.target_text}</strong>
-            </div>
-            <div>
-              <span>Reconocido</span>
-              <strong>{result.attempt.recognized_text || "-"}</strong>
-            </div>
-          </div>
         </section>
       )}
 
-      {error && <div className="language-event-message error">{error}</div>}
+      <div className="pr-bottom">
+        <TrainingPanel
+          stats={trainingStats}
+          contribute={contribute}
+          onContributeChange={setContribute}
+          busy={trainingBusy}
+          message={trainingMessage}
+          onExport={exportDataset}
+          onReset={resetSamples}
+        />
 
-      <section className="panel practice-history-panel">
-        <div className="panel-heading">
-          <div>
-            <h3>Últimos intentos</h3>
-            <p>Tu progreso se guarda en SQLite por cuenta.</p>
+        <section className="pr-card pr-history">
+          <div className="pr-card-head">
+            <span className="pr-eyebrow">
+              <History size={14} /> Últimos intentos
+            </span>
           </div>
-        </div>
-
-        {recentAttempts.length ? (
-          <div className="practice-history-list">
-            {recentAttempts.map((attempt) => (
-              <div className="practice-history-item" key={attempt.id}>
-                <div>
+          {recentAttempts.length ? (
+            <ul>
+              {recentAttempts.map((attempt) => (
+                <li key={attempt.id}>
+                  <span className={`pr-dot ${attempt.success ? "ok" : "ko"}`} />
                   <strong>{attempt.target_text}</strong>
-                  <span>
-                    {attempt.mode} · {attempt.difficulty}
-                  </span>
-                </div>
-                <div>
-                  <strong>{attempt.accuracy.toFixed(0)}%</strong>
-                  <span>{formatDuration(attempt.duration_ms)}</span>
-                </div>
-                <div className={attempt.success ? "success-text" : "retry-text"}>
-                  +{attempt.xp_earned} XP
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="statistics-empty">
-            Completa tu primer reto para empezar a construir tu progreso.
-          </div>
-        )}
-      </section>
+                  <small>{attempt.accuracy.toFixed(0)}%</small>
+                  <em>+{attempt.xp_earned} XP</em>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="pr-empty">Completa tu primer reto para ver tu historial.</p>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

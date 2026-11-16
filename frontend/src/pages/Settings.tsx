@@ -15,6 +15,7 @@ import {
   getAutoTtsMode,
   getStoredTheme,
   getTtsPreferences,
+  pushPreferences,
   saveTtsPreferences,
   setAutoTtsEnabled,
   setAutoTtsMode,
@@ -23,6 +24,7 @@ import type {
   AutoTtsMode,
   ThemePreference,
 } from "../services/preferences";
+import FaceEnrollment from "../components/FaceEnrollment";
 
 interface SettingsProps {
   onDisplayNameChange?: (name: string) => void;
@@ -118,6 +120,9 @@ function Settings({
       onDisplayNameChange?.(updatedProfile.display_name ?? "");
 
       persistLocalSettings();
+      await pushPreferences().catch((err) =>
+        console.warn("Preferencias guardadas solo en este dispositivo:", err),
+      );
       setMessage("Configuración guardada correctamente.");
     } catch (err) {
       console.error(err);
@@ -437,6 +442,8 @@ function Settings({
           </button>
         </div>
       </section>
+
+      <FaceEnrollment />
     </div>
   );
 }

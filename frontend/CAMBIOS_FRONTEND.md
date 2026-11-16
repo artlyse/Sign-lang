@@ -43,3 +43,23 @@ npm run dev
 ```
 
 El backend debe estar ejecutándose en el puerto configurado en `VITE_API_URL`.
+
+## Rediseño visual (UI refresh)
+
+- Iconos `lucide-react` en Sidebar, Header, Dashboard, Estadísticas, Plantillas y Login/Registro.
+- Login y Registro con panel ilustrado: mano con los 21 landmarks de MediaPipe animada, chips de "seña detectada", mostrar/ocultar contraseña.
+- Dashboard: banner de bienvenida con saludo, tarjetas de colores, accesos rápidos y ranking con barras.
+- Plantillas: buscador, filtros por categoría, más plantillas, botones Escuchar (TTS) y Copiar.
+- Estilos nuevos en `src/styles/ui-refresh.css` (con modo oscuro y responsive).
+- Nuevos componentes: `HandIllustration.tsx`, `AuthShowcase.tsx`.
+
+## Funcionalidad conectada al backend (v2)
+
+- Login/Registro con diseño sobrio (ilustración plana, sin efectos).
+- Práctica: guarda landmarks como datos de entrenamiento, botón "Mi seña era correcta",
+  panel "Tu modelo personal" (letras aprendidas, exportar al dataset, borrar muestras).
+- Traductor y Práctica muestran cuando el modelo personal ajustó la predicción.
+- Plantillas: CRUD real en `/api/templates` (crear, editar, favoritas, eliminar, contador de uso).
+- Dashboard: nivel de práctica, modelo personal y aprendizaje del corrector desde el backend.
+- Configuración: preferencias sincronizadas con `/api/users/me/preferences`.
+- Ver `docs/technical/PRACTICA_ENTRENAMIENTO.md`.

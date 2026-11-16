@@ -89,6 +89,19 @@ def _close_recognition_session(
     try:
         row = db.get(RecognitionSessionModel, session_id)
         if row:
+            # Una sesión sin predicciones (p. ej. se abrió el Traductor pero la
+            # cámara no arrancó) no aporta nada y ensuciaba las estadísticas.
+            has_predictions = (
+                db.query(Prediction.id)
+                .filter(Prediction.session_id == session_id)
+                .first()
+                is not None
+            )
+            if not has_predictions:
+                db.delete(row)
+                db.commit()
+                return
+
             row.ended_at = datetime.now(timezone.utc)
             row.total_predictions = int(total_predictions)
             db.commit()
@@ -169,7 +182,7 @@ async def websocket_recognition(websocket: WebSocket):
         user_id,
     )
 
-    hybrid_session = HybridRecognitionSession()
+    hybrid_session = HybridRecognitionSession(user_id)
     word_session = WordRecognitionSession()
     language_session = LanguageComposerSession()
     prediction_count = 0
@@ -493,6 +506,25 @@ async def websocket_recognition(websocket: WebSocket):
                             "language": language_state,
                         },
                     )
+
+                elif mode == "insert_text":
+                    language_state = await asyncio.to_thread(
+                        language_session.insert_literal_words,
+                        str(data.get("text", ""))[:300],
+                        str(data.get("source", "manual"))[:20],
+                        bool(data.get("keep_case", False)),
+                        bool(data.get("replace", False)),
+                    )
+                    payload = {
+                        "kind": "language",
+                        "mode": "language",
+                        "status": "word_sign_added",
+                        "language": language_state,
+                    }
+                    if request_id is not None:
+                        payload["request_id"] = request_id
+                    if not await _safe_send(websocket, payload):
+                        break
 
                 elif mode == "dismiss_learning":
                     language_state = language_session.dismiss_learning()

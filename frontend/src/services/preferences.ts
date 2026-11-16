@@ -1,3 +1,5 @@
+import { apiJson } from "./api";
+
 /**
  * Persistencia local de tema y opciones de SpeechSynthesis/TTS.
  */
@@ -91,4 +93,66 @@ export function getAutoTtsMode(): AutoTtsMode {
 
 export function setAutoTtsMode(mode: AutoTtsMode) {
   localStorage.setItem(AUTO_TTS_MODE_KEY, mode);
+}
+
+/* ------------------------------------------------------------------ */
+/* Plantilla activa en el Traductor ("all" = todas las visibles)        */
+/* ------------------------------------------------------------------ */
+
+export const ACTIVE_TEMPLATE_KEY = "signlang_active_template";
+
+export function getActiveTemplateId(): string {
+  try {
+    return localStorage.getItem(ACTIVE_TEMPLATE_KEY) || "all";
+  } catch {
+    return "all";
+  }
+}
+
+export function setActiveTemplateId(id: string) {
+  try {
+    localStorage.setItem(ACTIVE_TEMPLATE_KEY, id);
+  } catch {
+    /* almacenamiento no disponible */
+  }
+  // Se guarda también en la cuenta para tenerla en otros equipos.
+  pushPreferences().catch(() => undefined);
+}
+
+/* ------------------------------------------------------------------ */
+/* Sincronización con el backend (/api/users/me/preferences)           */
+/* ------------------------------------------------------------------ */
+
+
+const SYNC_KEYS = [
+  THEME_KEY,
+  TTS_VOICE_KEY,
+  TTS_RATE_KEY,
+  TTS_PITCH_KEY,
+  TTS_VOLUME_KEY,
+  AUTO_TTS_KEY,
+  AUTO_TTS_MODE_KEY,
+  "show_landmarks",
+  "practice_contribute",
+  "signlang_active_template",
+];
+
+export async function pushPreferences() {
+  const data: Record<string, string> = {};
+  for (const key of SYNC_KEYS) {
+    const value = localStorage.getItem(key);
+    if (value !== null) data[key] = value;
+  }
+  await apiJson("/api/users/me/preferences", { method: "PUT", json: { data } });
+}
+
+export async function pullPreferences() {
+  const { data } = await apiJson<{ data: Record<string, unknown> }>(
+    "/api/users/me/preferences",
+  );
+  for (const key of SYNC_KEYS) {
+    const value = data?.[key];
+    if (typeof value === "string") localStorage.setItem(key, value);
+  }
+  applyStoredTheme();
 }

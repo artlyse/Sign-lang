@@ -321,6 +321,62 @@ class LanguageComposerSession:
         }
         return self.state()
 
+    def insert_literal_words(
+        self,
+        text: str,
+        source: str = "manual",
+        keep_case: bool = False,
+        replace_sentence: bool = False,
+    ) -> dict:
+        """Agrega palabras tal cual, sin pasar por el corrector léxico.
+
+        Se usa para nombres propios (p. ej. el nombre obtenido del registro
+        facial), que el diccionario intentaría "corregir"."""
+        self.last_event = None
+        value = str(text or "") if keep_case else str(text or "").upper()
+        tokens = [item for item in value.split() if item][:40]
+        if not tokens:
+            return self.state()
+
+        if replace_sentence:
+            # La frase de la plantilla completa lo que ya se señó (p. ej. "HOLA"
+            # -> "¡Hola! Me llamo Ana."): se descarta lo anterior sin aprender de ello.
+            self.sentence_words = []
+            self.sentence_items = []
+            self.pending_feedback = None
+            self._reset_current_word_state()
+        elif self.raw_word:
+            # Si se estaba deletreando una palabra, se cierra primero para no perderla.
+            self.finalize_word()
+        if self.pending_feedback:
+            self._commit_pending_implicit()
+        self._reset_current_word_state()
+
+        for token in tokens:
+            token = token[:40]
+            self.sentence_words.append(token)
+            item = {
+                "raw": token,
+                "word": token,
+                "predicted": token,
+                "context_words": list(self._context_words()),
+                "suggestions": [],
+                "recognition_mode": source,
+                "recognition_confidence": 1.0,
+            }
+            self.sentence_items.append(item)
+            self.last_finalized = dict(item)
+
+        self.pending_feedback = None
+        self.last_event = {
+            "type": "word_sign_added",
+            "word": " ".join(tokens),
+            "words": tokens,
+            "mode": source,
+            "source": source,
+        }
+        return self.state()
+
     def hand_absent(self) -> dict:
         self.candidate_letter = None
         self.candidate_mode = None
